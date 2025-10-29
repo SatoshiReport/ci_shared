@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-ci-tools"
+version = "0.1.0"
+description = "Shared CI automation scripts for Zeus and Kalshi repositories"
+authors = [{name = "Codex Automation"}]
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools"
+]
+
+[project.optional-dependencies]
+dev = ["jinja2>=3.1.0"]
+
+[tool.setuptools]
+packages = ["ci_tools"]
+include-package-data = true
+script-files = ["ci_tools/scripts/xci.sh"]
+
+[tool.setuptools.package-data]
+ci_tools = ["scripts/*.sh", "scripts/*.py", "vendor/**/*"]
+
