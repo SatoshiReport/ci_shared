@@ -24,7 +24,7 @@ shared-checks:
 	$(PYTHON) -m ci_tools.scripts.policy_guard
 	$(PYTHON) -m ci_tools.scripts.data_guard
 	$(PYTHON) -m ci_tools.scripts.structure_guard --root src --max-class-lines $(MAX_CLASS_LINES)
-	$(PYTHON) scripts/complexity_guard.py --root src --max-cyclomatic 10 --max-cognitive 15
+	$(PYTHON) ci_shared/scripts/complexity_guard.py --root src --max-cyclomatic 10 --max-cognitive 15
 	$(PYTHON) -m ci_tools.scripts.module_guard --root src --max-module-lines 400
 	$(PYTHON) -m ci_tools.scripts.function_size_guard --root src --max-function-lines 80
 	$(PYTHON) -m ci_tools.scripts.inheritance_guard --root src --max-depth 2
