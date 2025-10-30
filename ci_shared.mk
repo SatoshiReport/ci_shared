@@ -18,7 +18,7 @@ shared-checks:
 	isort --profile black $(FORMAT_TARGETS)
 	black $(FORMAT_TARGETS)
 	$(PYTHON) -m compileall src tests
-	codespell --skip=".git,artifacts,models,node_modules,logs,*.json,*.csv" --quiet-level=2 --ignore-words=config/codespell_ignore_words.txt
+	codespell --skip=".git,artifacts,models,node_modules,logs,*.json,*.csv" --quiet-level=2 --ignore-words=ci_shared/config/codespell_ignore_words.txt
 	vulture $(FORMAT_TARGETS) --min-confidence 80
 	deptry --config pyproject.toml $(FORMAT_TARGETS)
 	$(PYTHON) -m ci_tools.scripts.policy_guard
