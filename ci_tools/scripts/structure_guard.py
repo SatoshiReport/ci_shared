@@ -22,7 +22,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--max-class-lines",
         type=int,
-        default=400,
+        default=100,
         help="Maximum allowed number of lines per class definition.",
     )
     parser.add_argument(
@@ -31,14 +31,6 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         type=Path,
         default=[],
         help="Path prefix to exclude from the scan (may be passed multiple times).",
-    )
-    parser.add_argument(
-        "--baseline",
-        type=Path,
-        help=(
-            "Optional file containing classes to temporarily ignore. "
-            "Use format '<path>:<ClassName>' per line."
-        ),
     )
     return parser.parse_args(list(argv) if argv is not None else None)
 
@@ -97,16 +89,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     exclusions = [path.resolve() for path in args.exclude]
     repo_root = Path.cwd()
 
-    baseline_entries = set()
-    if args.baseline:
-        content = args.baseline.read_text().splitlines()
-        for line in content:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            baseline_entries.add(stripped)
-    baseline_hits: set[str] = set()
-
     violations: List[str] = []
     try:
         file_iter = list(iter_python_files(root))
@@ -128,10 +110,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 relative = entry_path.resolve().relative_to(repo_root)
             except ValueError:
                 relative = entry_path
-            key = f"{relative}:{class_name}"
-            if key in baseline_entries:
-                baseline_hits.add(key)
-                continue
             violations.append(
                 f"{relative}:{start} class {class_name} spans {length} lines "
                 f"(limit {args.max_class_lines})"
@@ -146,16 +124,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         for violation in sorted(violations):
             print(f"  - {violation}", file=sys.stderr)
         return 1
-
-    unused_baseline = baseline_entries - baseline_hits
-    if unused_baseline:
-        print(
-            "structure_guard: baseline entries not encountered; "
-            "consider removing them:",
-            file=sys.stderr,
-        )
-        for entry in sorted(unused_baseline):
-            print(f"  - {entry}", file=sys.stderr)
 
     return 0
 

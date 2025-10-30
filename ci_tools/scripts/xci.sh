@@ -84,6 +84,9 @@ if ! command -v "${CODEX_CLI}" >/dev/null 2>&1; then
   exit 2
 fi
 
+# Track start time for stats
+START_TIME=$(date +%s)
+
 if [[ $# -gt 0 ]]; then
   CI_COMMAND=("$@")
 else
@@ -190,9 +193,21 @@ PY
     else
       echo "[xci] Working tree clean; skipping commit message request."
     fi
+
+    # Calculate run statistics
+    END_TIME=$(date +%s)
+    ELAPSED_TIME=$((END_TIME - START_TIME))
+    PATCHES_APPLIED=$((attempt - 1))
+
     echo ""
     echo "========================================"
-    echo "[xci] ✓ SUCCESS: CI passed on attempt ${attempt}!"
+    echo "[xci] ✓ SUCCESS: CI passed!"
+    echo "========================================"
+    echo "Run Statistics:"
+    echo "  • Total attempts: ${attempt}"
+    echo "  • Patches applied: ${PATCHES_APPLIED}"
+    echo "  • Elapsed time: ${ELAPSED_TIME}s"
+    echo "  • CI command: ${CI_COMMAND[*]}"
     echo "========================================"
     break
   fi
@@ -201,6 +216,20 @@ PY
     echo "" >&2
     echo "========================================"  >&2
     echo "[xci] ✗ FAILED: Maximum attempts (${MAX_ATTEMPTS}) reached" >&2
+    echo "========================================"  >&2
+    echo "CI is still failing after ${MAX_ATTEMPTS} automated fix attempts." >&2
+    echo "" >&2
+    echo "Common reasons for persistent failures:" >&2
+    echo "  • Violations are too numerous/complex (${MAX_ATTEMPTS} patches insufficient)" >&2
+    echo "  • Large classes/functions need architectural refactoring" >&2
+    echo "  • Issues require design decisions beyond automated fixes" >&2
+    echo "  • Structural problems need manual intervention" >&2
+    echo "" >&2
+    echo "Next steps:" >&2
+    echo "  1. Review CI output above to understand the failures" >&2
+    echo "  2. Check .xci/archive/ for Codex's attempted solutions" >&2
+    echo "  3. Address the root architectural issues manually" >&2
+    echo "  4. Consider breaking down large components" >&2
     echo "========================================"  >&2
     exit 1
   fi
@@ -231,6 +260,19 @@ Most recent CI log tail:
 \`\`\`
 ${log_tail}
 \`\`\`
+
+STRICT REQUIREMENTS - YOU MUST FOLLOW THESE RULES:
+1. Fix the UNDERLYING CODE ISSUES, not the tests or CI checks
+2. NEVER add --baseline arguments to any guard scripts in Makefiles or CI configurations
+3. NEVER create baseline files (e.g., module_guard_baseline.txt, function_size_guard_baseline.txt)
+4. NEVER add exemption comments like "policy_guard: allow-*", "# noqa", or "pylint: disable"
+5. NEVER add --exclude arguments to guard scripts to bypass checks
+6. NEVER modify guard scripts themselves (policy_guard.py, module_guard.py, structure_guard.py, function_size_guard.py, etc.)
+7. NEVER modify CI configuration files (Makefile, ci.sh, xci.sh, etc.)
+8. If a module/class/function is too large, REFACTOR it into smaller pieces
+9. If there's a policy violation, FIX the code to comply with the policy
+
+Your job is to fix the code quality issues, not to bypass the quality checks.
 
 Please respond with a unified diff (starting with \`diff --git\`) that fixes the failure.
 If no change is needed, respond with NOOP.
@@ -272,31 +314,140 @@ EOF_PROMPT
   fi
 
   patch_file=$(mktmp)
-  if ! python - "${response_file}" "${patch_file}" <<'PY'
+  extract_result=$(mktmp)
+  if ! python - "${response_file}" "${patch_file}" "${extract_result}" <<'PY'
 import pathlib
 import sys
 
 response_path = pathlib.Path(sys.argv[1])
 patch_path = pathlib.Path(sys.argv[2])
+result_path = pathlib.Path(sys.argv[3])
 
 text = response_path.read_text()
 if text.startswith("assistant:"):
     text = text.partition("\n")[2]
 
+text = text.strip()
+
+# Check if response is empty or just whitespace
+if not text:
+    result_path.write_text("EMPTY_RESPONSE")
+    sys.exit(1)
+
+# Check if response explains it can't fix the issue
+if any(phrase in text.lower() for phrase in [
+    "cannot automatically",
+    "too complex",
+    "requires manual",
+    "architectural decision",
+    "beyond automated",
+    "cannot be automatically",
+]):
+    result_path.write_text("REQUIRES_MANUAL")
+    # Still try to extract any partial response
+    marker = "diff --git "
+    idx = text.find(marker)
+    if idx == -1:
+        sys.exit(1)
+    patch_path.write_text(text[idx:])
+    sys.exit(0)
+
 marker = "diff --git "
 idx = text.find(marker)
 if idx == -1:
+    result_path.write_text("NO_DIFF")
     sys.exit(1)
 
 patch_path.write_text(text[idx:])
+result_path.write_text("SUCCESS")
 PY
   then
-    echo "[xci] Unable to extract diff from Codex response; will retry. (Response saved at ${archive_prefix}_response.txt)" >&2
-    ((attempt+=1))
-    continue
+    extract_status=$(cat "${extract_result}" 2>/dev/null || echo "UNKNOWN")
+
+    case "${extract_status}" in
+      EMPTY_RESPONSE)
+        echo "" >&2
+        echo "========================================"  >&2
+        echo "[xci] ✗ FAILED: Codex returned empty response" >&2
+        echo "========================================"  >&2
+        echo "This usually means the task is too complex for automated fixes." >&2
+        echo "" >&2
+        echo "Review the CI failures and consider:" >&2
+        echo "  • Breaking large classes/functions into smaller pieces" >&2
+        echo "  • Refactoring complex code manually" >&2
+        echo "  • Addressing architectural issues" >&2
+        echo "" >&2
+        echo "Prompt saved at: ${archive_prefix}_prompt.txt" >&2
+        echo "Response saved at: ${archive_prefix}_response.txt" >&2
+        echo "========================================"  >&2
+        exit 5
+        ;;
+      REQUIRES_MANUAL)
+        echo "" >&2
+        echo "========================================"  >&2
+        echo "[xci] ✗ FAILED: Changes require manual intervention" >&2
+        echo "========================================"  >&2
+        echo "Codex indicated this issue cannot be fixed automatically." >&2
+        echo "" >&2
+        echo "Common reasons:" >&2
+        echo "  • Classes/functions too large (need architectural refactoring)" >&2
+        echo "  • Complex policy violations (require design decisions)" >&2
+        echo "  • Structural issues (need breaking changes)" >&2
+        echo "" >&2
+        echo "See Codex explanation at: ${archive_prefix}_response.txt" >&2
+        echo "========================================"  >&2
+        exit 6
+        ;;
+      NO_DIFF|*)
+        if (( attempt >= MAX_ATTEMPTS - 1 )); then
+          echo "" >&2
+          echo "========================================"  >&2
+          echo "[xci] ✗ FAILED: Unable to extract fixes from Codex" >&2
+          echo "========================================"  >&2
+          echo "After ${attempt} attempts, Codex has not provided usable patches." >&2
+          echo "" >&2
+          echo "This typically indicates:" >&2
+          echo "  • The violations are too numerous/complex for automated fixing" >&2
+          echo "  • The codebase needs manual architectural improvements" >&2
+          echo "  • The CI failures require design decisions" >&2
+          echo "" >&2
+          echo "Latest prompt: ${archive_prefix}_prompt.txt" >&2
+          echo "Latest response: ${archive_prefix}_response.txt" >&2
+          echo "========================================"  >&2
+          exit 7
+        else
+          echo "[xci] Unable to extract diff from Codex response; will retry. (Response saved at ${archive_prefix}_response.txt)" >&2
+          ((attempt+=1))
+          continue
+        fi
+        ;;
+    esac
   fi
 
   cp "${patch_file}" "${archive_prefix}_patch.diff"
+
+  # Validate patch doesn't modify protected CI infrastructure
+  FORBIDDEN_PATHS="ci_tools/|scripts/ci\.sh|Makefile|xci\.sh|/ci\.py"
+  forbidden_files=$(grep "^diff --git" "${patch_file}" | grep -E "${FORBIDDEN_PATHS}" || true)
+  if [[ -n "${forbidden_files}" ]]; then
+    echo "" >&2
+    echo "========================================"  >&2
+    echo "[xci] ✗ REJECTED: Patch modifies protected CI infrastructure" >&2
+    echo "========================================"  >&2
+    echo "Forbidden files detected:" >&2
+    echo "${forbidden_files}" >&2
+    echo "" >&2
+    echo "Only application code should be modified, not CI tools." >&2
+    echo "The following paths are protected:" >&2
+    echo "  - ci_tools/" >&2
+    echo "  - scripts/ci.sh" >&2
+    echo "  - Makefile" >&2
+    echo "  - xci.sh" >&2
+    echo "  - ci.py" >&2
+    echo "========================================"  >&2
+    ((attempt+=1))
+    continue
+  fi
 
   if git apply --check --whitespace=nowarn "${patch_file}" 2>/dev/null; then
     git apply --allow-empty --whitespace=nowarn "${patch_file}"

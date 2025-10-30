@@ -32,11 +32,6 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default=[],
         help="Path prefix to exclude from the scan.",
     )
-    parser.add_argument(
-        "--baseline",
-        type=Path,
-        help="Optional file containing functions to temporarily ignore.",
-    )
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
@@ -94,16 +89,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     exclusions = [path.resolve() for path in args.exclude]
     repo_root = Path.cwd()
 
-    baseline_entries = set()
-    if args.baseline:
-        content = args.baseline.read_text().splitlines()
-        for line in content:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            baseline_entries.add(stripped)
-    baseline_hits: set[str] = set()
-
     all_violations: List[str] = []
 
     try:
@@ -125,11 +110,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             except ValueError:
                 relative = Path(file_str)
 
-            key = f"{relative}::{func_name}"
-            if key in baseline_entries:
-                baseline_hits.add(key)
-                continue
-
             all_violations.append(
                 f"{relative}::{func_name} (line {lineno}) contains {line_count} lines "
                 f"(limit {args.max_function_lines})"
@@ -144,16 +124,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         for violation in sorted(all_violations):
             print(f"  - {violation}", file=sys.stderr)
         return 1
-
-    unused_baseline = baseline_entries - baseline_hits
-    if unused_baseline:
-        print(
-            "function_size_guard: baseline entries not encountered; "
-            "consider removing them:",
-            file=sys.stderr,
-        )
-        for entry in sorted(unused_baseline):
-            print(f"  - {entry}", file=sys.stderr)
 
     return 0
 

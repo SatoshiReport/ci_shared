@@ -113,6 +113,7 @@ DEFAULT_PROTECTED_PATH_PREFIXES: tuple[str, ...] = (
     "ci.py",
     "ci_tools/",
     "scripts/ci.sh",
+    "Makefile",
 )
 
 PROTECTED_PATH_PREFIXES: tuple[str, ...] = tuple(
