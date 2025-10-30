@@ -13,7 +13,19 @@ from typing import Iterable, List, Sequence
 from coverage import Coverage
 from coverage.exceptions import CoverageException, NoDataError, NoSource
 
-ROOT = Path(__file__).resolve().parents[1]
+
+def find_repo_root() -> Path:
+    """Find repository root by looking for .git directory."""
+    current = Path.cwd().resolve()
+    while current != current.parent:
+        if (current / ".git").exists():
+            return current
+        current = current.parent
+    # Fallback to current working directory
+    return Path.cwd().resolve()
+
+
+ROOT = find_repo_root()
 
 
 @dataclass(frozen=True)
