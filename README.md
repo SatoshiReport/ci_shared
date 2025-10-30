@@ -1,21 +1,63 @@
 # codex-ci-tools
 
-Shared continuous-integration helpers used by the Zeus and Kalshi repositories. The package
-bundles the Codex automation workflow (`ci_tools`) along with the `xci.sh` convenience script.
+Shared continuous-integration helpers used across the Zeus and Kalshi
+repositories. The toolkit packages the Codex automation workflow (`ci_tools`),
+guard scripts, Makefile snippets, and legacy shell glue to keep CI pipelines
+stable.
 
-## Installation
+## Features
+- Codex-powered CI repair loop with configurable safety rails
+- Legacy-compatible `xci.sh` wrapper that archives Codex prompts/responses
+- Extensive guard suite (policy, coverage, module size, structure, etc.)
+- Reusable `ci_shared.mk` target bundling linters, formatters, and guards
+- Lightweight vendored dependencies for reproducible automation environments
 
-Install the package in editable mode from each repository root so that the shared scripts are on
-`PYTHONPATH` and the `xci.sh` wrapper is placed on your shell `PATH`:
+## Quick Start
 
-```bash
-python -m pip install -e ../ci_shared
-```
+1. Install from the consuming repository root:
+   ```bash
+   python -m pip install -e ../ci_shared
+   ```
+2. Run the automation loop:
+   ```bash
+   python -m ci_tools.ci --model gpt-5-codex --reasoning-effort high
+   ```
+   or use the legacy wrapper:
+   ```bash
+   xci.sh
+   ```
+3. Optional: include the shared Makefile target to adopt the full guard suite:
+   ```make
+   include ci_shared.mk
 
-## Usage
+   .PHONY: check
+   check: shared-checks
+   ```
 
-- `python -m ci_tools.ci` – run the automated Codex repair loop.
-- `xci.sh` – bash wrapper that invokes the same workflow while preserving the legacy CLI surface.
+## Configuration
+- `ci_shared.config.json` (optional) supplies repository context, protected
+  path prefixes, and coverage thresholds consumed by the automation loop.
+- Environment variables such as `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT`, and
+  `GIT_REMOTE` customize Codex behavior and push targets.
+- `xci.config.json` fine-tunes the legacy shell wrapper (attempt counts, log
+  tails, archive paths).
 
-Repository-specific configuration (repository description, source layout, etc.) can be supplied via
-`ci_shared.config.json` at the repository root. See the Zeus or Kalshi repository for examples.
+## Guard Suite
+Key guard scripts live under `ci_tools/scripts/` and `scripts/`:
+- `policy_guard.py` – enforces banned keywords, TODO markers, and fail-fast rules
+- `module_guard.py`, `function_size_guard.py` – prevent oversize modules/functions
+- `coverage_guard.py` – enforces per-file coverage thresholds
+- `documentation_guard.py` – verifies that required docs exist
+- `scripts/complexity_guard.py` – limits cyclomatic and cognitive complexity
+
+See the [Guard Suite reference](docs/guard-suite.md) for the full list of
+scripts and configuration knobs.
+
+## Documentation
+- [Getting Started](docs/getting-started.md)
+- [Automation Workflow](docs/automation.md)
+- [Guard Suite](docs/guard-suite.md)
+- [Development Guide](docs/development.md)
+- [Claude Guidance](CLAUDE.md)
+
+For security practices, review [`SECURITY.md`](SECURITY.md).
