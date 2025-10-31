@@ -126,66 +126,99 @@ def scan_file(
     return violations
 
 
+def _format_method_violation(
+    entry_path: Path,
+    *,
+    class_name: str,
+    lineno: int,
+    public_count: int,
+    total_count: int,
+    max_public: int,
+    max_total: int,
+    repo_root: Path,
+) -> str:
+    try:
+        relative = entry_path.resolve().relative_to(repo_root)
+    except ValueError:
+        relative = entry_path
+    parts: List[str] = []
+    if public_count > max_public:
+        parts.append(f"{public_count} public methods (limit {max_public})")
+    if total_count > max_total:
+        parts.append(f"{total_count} total methods (limit {max_total})")
+    details = ", ".join(parts)
+    return f"{relative}:{lineno} class {class_name} has {details}"
+
+
+def _collect_method_violations(
+    path: Path,
+    *,
+    max_public: int,
+    max_total: int,
+    repo_root: Path,
+) -> List[str]:
+    entries = scan_file(path, max_public, max_total)
+    return [
+        _format_method_violation(
+            entry_path,
+            class_name=class_name,
+            lineno=lineno,
+            public_count=public_count,
+            total_count=total_count,
+            max_public=max_public,
+            max_total=max_total,
+            repo_root=repo_root,
+        )
+        for entry_path, class_name, lineno, public_count, total_count in entries
+    ]
+
+
+def _print_method_report(violations: List[str]) -> None:
+    header = (
+        "Classes with too many methods detected (multi-concern indicator). "
+        "Consider extracting service objects or using composition:"
+    )
+    print(header, file=sys.stderr)
+    for violation in sorted(violations):
+        print(f"  - {violation}", file=sys.stderr)
+    print(
+        "\nTip: Extract groups of related methods into separate service classes",
+        file=sys.stderr,
+    )
+
+
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
     root = args.root.resolve()
     exclusions = [path.resolve() for path in args.exclude]
     repo_root = Path.cwd()
 
-    violations: List[str] = []
     try:
         file_iter = list(iter_python_files(root))
     except OSError as exc:
-        print(
-            f"method_count_guard: failed to traverse {root}: {exc}",
-            file=sys.stderr,
-        )
+        print(f"method_count_guard: failed to traverse {root}: {exc}", file=sys.stderr)
         return 1
 
+    violations: List[str] = []
     for file_path in file_iter:
         resolved = file_path.resolve()
         if is_excluded(resolved, exclusions):
             continue
         try:
-            entries = scan_file(
-                resolved, args.max_public_methods, args.max_total_methods
+            violations.extend(
+                _collect_method_violations(
+                    resolved,
+                    max_public=args.max_public_methods,
+                    max_total=args.max_total_methods,
+                    repo_root=repo_root,
+                )
             )
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
             return 1
 
-        for entry_path, class_name, lineno, public_count, total_count in entries:
-            try:
-                relative = entry_path.resolve().relative_to(repo_root)
-            except ValueError:
-                relative = entry_path
-
-            violation_parts: List[str] = []
-            if public_count > args.max_public_methods:
-                violation_parts.append(
-                    f"{public_count} public methods (limit {args.max_public_methods})"
-                )
-            if total_count > args.max_total_methods:
-                violation_parts.append(
-                    f"{total_count} total methods (limit {args.max_total_methods})"
-                )
-
-            violations.append(
-                f"{relative}:{lineno} class {class_name} has {', '.join(violation_parts)}"
-            )
-
     if violations:
-        header = (
-            "Classes with too many methods detected (multi-concern indicator). "
-            "Consider extracting service objects or using composition:"
-        )
-        print(header, file=sys.stderr)
-        for violation in sorted(violations):
-            print(f"  - {violation}", file=sys.stderr)
-        print(
-            "\nTip: Extract groups of related methods into separate service classes",
-            file=sys.stderr,
-        )
+        _print_method_report(violations)
         return 1
 
     return 0

@@ -147,56 +147,93 @@ def scan_file(
     return violations
 
 
+def _format_inheritance_violation(
+    entry_path: Path,
+    *,
+    class_name: str,
+    lineno: int,
+    depth: int,
+    base_names: List[str],
+    limit: int,
+    repo_root: Path,
+) -> str:
+    try:
+        relative = entry_path.resolve().relative_to(repo_root)
+    except ValueError:
+        relative = entry_path
+    bases_str = ", ".join(base_names) if base_names else "(none)"
+    return (
+        f"{relative}:{lineno} class {class_name} has inheritance "
+        f"depth {depth} (limit {limit}) - bases: {bases_str}"
+    )
+
+
+def _collect_inheritance_violations(
+    path: Path,
+    *,
+    max_depth: int,
+    repo_root: Path,
+) -> List[str]:
+    entries = scan_file(path, max_depth)
+    return [
+        _format_inheritance_violation(
+            entry_path,
+            class_name=class_name,
+            lineno=lineno,
+            depth=depth,
+            base_names=base_names,
+            limit=max_depth,
+            repo_root=repo_root,
+        )
+        for entry_path, class_name, lineno, depth, base_names in entries
+    ]
+
+
+def _print_inheritance_report(violations: List[str], limit: int) -> None:
+    header = (
+        "Deep inheritance detected. Refactor the following classes "
+        f"to stay within depth {limit} (prefer composition over inheritance):"
+    )
+    print(header, file=sys.stderr)
+    for violation in sorted(violations):
+        print(f"  - {violation}", file=sys.stderr)
+    print(
+        "\nTip: Replace mixin inheritance with service objects injected via __init__",
+        file=sys.stderr,
+    )
+
+
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
     root = args.root.resolve()
     exclusions = [path.resolve() for path in args.exclude]
     repo_root = Path.cwd()
 
-    violations: List[str] = []
     try:
         file_iter = list(iter_python_files(root))
     except OSError as exc:
-        print(
-            f"inheritance_guard: failed to traverse {root}: {exc}",
-            file=sys.stderr,
-        )
+        print(f"inheritance_guard: failed to traverse {root}: {exc}", file=sys.stderr)
         return 1
 
+    violations: List[str] = []
     for file_path in file_iter:
         resolved = file_path.resolve()
         if is_excluded(resolved, exclusions):
             continue
         try:
-            entries = scan_file(resolved, args.max_depth)
+            violations.extend(
+                _collect_inheritance_violations(
+                    resolved,
+                    max_depth=args.max_depth,
+                    repo_root=repo_root,
+                )
+            )
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
             return 1
 
-        for entry_path, class_name, lineno, depth, base_names in entries:
-            try:
-                relative = entry_path.resolve().relative_to(repo_root)
-            except ValueError:
-                relative = entry_path
-
-            bases_str = ", ".join(base_names) if base_names else "(none)"
-            violations.append(
-                f"{relative}:{lineno} class {class_name} has inheritance "
-                f"depth {depth} (limit {args.max_depth}) - bases: {bases_str}"
-            )
-
     if violations:
-        header = (
-            "Deep inheritance detected. Refactor the following classes "
-            f"to stay within depth {args.max_depth} (prefer composition over inheritance):"
-        )
-        print(header, file=sys.stderr)
-        for violation in sorted(violations):
-            print(f"  - {violation}", file=sys.stderr)
-        print(
-            "\nTip: Replace mixin inheritance with service objects injected via __init__",
-            file=sys.stderr,
-        )
+        _print_inheritance_report(violations, args.max_depth)
         return 1
 
     return 0

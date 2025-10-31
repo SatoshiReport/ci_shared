@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 from radon.complexity import cc_visit
-from radon.visitors import ComplexityVisitor
 
 
 class ComplexityViolation(NamedTuple):
@@ -39,8 +38,6 @@ def calculate_cognitive_complexity(node: ast.FunctionDef) -> int:
     Cognitive complexity measures how difficult code is to understand,
     accounting for nested control structures and logical operators.
     """
-    complexity = 0
-    nesting_level = 0
 
     class CognitiveComplexityVisitor(ast.NodeVisitor):
         def __init__(self):
@@ -117,7 +114,9 @@ def check_file_complexity(
             # Calculate cognitive complexity
             cognitive = 0
             if function_name in function_nodes:
-                cognitive = calculate_cognitive_complexity(function_nodes[function_name])
+                cognitive = calculate_cognitive_complexity(
+                    function_nodes[function_name]
+                )
 
             # Determine violations
             violation_types = []
@@ -211,9 +210,7 @@ def main():
                 )
             print()
 
-        print(
-            f"Total: {len(all_violations)} function(s) exceed complexity limits"
-        )
+        print(f"Total: {len(all_violations)} function(s) exceed complexity limits")
         sys.exit(1)
     else:
         print(

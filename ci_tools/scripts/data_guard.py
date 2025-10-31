@@ -10,7 +10,7 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, List, Sequence, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeGuard
 
 ROOT = Path(__file__).resolve().parents[1]
 SCAN_DIRECTORIES: Sequence[Path] = (ROOT / "src", ROOT / "tests")
@@ -52,7 +52,6 @@ class DataGuardAllowlistError(RuntimeError):
         super().__init__(f"{self.default_message}: {detail}")
 
 
-
 def _load_allowlist() -> Dict[str, set[str]]:
     if not ALLOWLIST_PATH.exists():
         return {"assignments": set(), "comparisons": set(), "dataframe": set()}
@@ -62,9 +61,11 @@ def _load_allowlist() -> Dict[str, set[str]]:
         raise DataGuardAllowlistError(
             detail=f"JSON parse error at {ALLOWLIST_PATH}: {exc}"
         ) from exc
+
     def _coerce_group(key: str) -> set[str]:
         values = payload.get(key, [])
         return {str(item) for item in values}
+
     return {
         "assignments": _coerce_group("assignments"),
         "comparisons": _coerce_group("comparisons"),
@@ -119,14 +120,16 @@ def extract_target_names(target: ast.AST) -> Iterable[str]:
         yield target.attr
 
 
-
 def _is_all_caps_identifier(name: str) -> bool:
     stripped = name.strip()
-    return bool(stripped) and stripped.upper() == stripped and any(ch.isalpha() for ch in stripped)
+    return (
+        bool(stripped)
+        and stripped.upper() == stripped
+        and any(ch.isalpha() for ch in stripped)
+    )
 
 
-
-def is_numeric_constant(node: ast.AST | None) -> bool:
+def is_numeric_constant(node: ast.AST | None) -> TypeGuard[ast.Constant]:
     return isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
 
 
@@ -149,8 +152,6 @@ def _should_flag_assignment(target_names: Iterable[str], value: ast.AST | None) 
     return value.value not in ALLOWED_NUMERIC_LITERALS
 
 
-
-
 def _should_flag_comparison(names: Iterable[str]) -> bool:
     identifiers = [name for name in names if name]
     if not identifiers:
@@ -160,22 +161,83 @@ def _should_flag_comparison(names: Iterable[str]) -> bool:
     return not any(_allowlisted(name, "comparisons") for name in identifiers)
 
 
+def _sequence_element_has_literal(elt: ast.AST) -> bool:
+    if isinstance(elt, ast.Constant):
+        return isinstance(elt.value, (int, float, str))
+    if isinstance(elt, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
+        return contains_literal_dataset(elt)
+    return False
+
 
 def contains_literal_dataset(node: ast.AST) -> bool:
     if isinstance(node, ast.Dict):
         return any(contains_literal_dataset(value) for value in node.values)
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        for elt in node.elts:  # type: ignore[attr-defined]
-            if isinstance(elt, ast.Constant):
-                if isinstance(elt.value, (int, float, str)):
-                    return True
-            elif isinstance(elt, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
-                if contains_literal_dataset(elt):
-                    return True
-        return False
-    if isinstance(node, ast.Constant):
-        return isinstance(node.value, (int, float, str))
-    return False
+        return any(_sequence_element_has_literal(elt) for elt in node.elts)
+    return isinstance(node, ast.Constant) and isinstance(node.value, (int, float, str))
+
+
+def _flatten_assignment_targets(targets: Iterable[ast.AST]) -> list[str]:
+    names: list[str] = []
+    for target in targets:
+        names.extend(extract_target_names(target))
+    return names
+
+
+def _contains_sensitive_token(names: Iterable[str]) -> bool:
+    lowered = [name.lower() for name in names]
+    return any(
+        token in candidate for candidate in lowered for token in SENSITIVE_NAME_TOKENS
+    )
+
+
+def _build_assignment_violation(
+    path: Path,
+    *,
+    target_names: list[str],
+    value: ast.AST | None,
+    lineno: int,
+    prefix: str,
+) -> Optional[Violation]:
+    if not target_names or not _contains_sensitive_token(target_names):
+        return None
+    if not _should_flag_assignment(target_names, value):
+        return None
+    message = (
+        f"{prefix} {literal_value_repr(value)} for {', '.join(sorted(target_names))}"
+    )
+    return Violation(path=path, lineno=lineno, message=message)
+
+
+def _assignment_violation_from_node(path: Path, node: ast.AST) -> Optional[Violation]:
+    if isinstance(node, ast.Assign):
+        names = _flatten_assignment_targets(node.targets)
+        return _build_assignment_violation(
+            path,
+            target_names=names,
+            value=node.value,
+            lineno=node.lineno,
+            prefix="literal assignment",
+        )
+    if isinstance(node, ast.AnnAssign):
+        names = list(extract_target_names(node.target))
+        return _build_assignment_violation(
+            path,
+            target_names=names,
+            value=node.value,
+            lineno=node.lineno,
+            prefix="annotated literal assignment",
+        )
+    return None
+
+
+def _iter_sensitive_assignment_violations(
+    path: Path, tree: ast.AST
+) -> Iterator[Violation]:
+    for node in ast.walk(tree):
+        violation = _assignment_violation_from_node(path, node)
+        if violation:
+            yield violation
 
 
 def collect_sensitive_assignments() -> List[Violation]:
@@ -184,46 +246,32 @@ def collect_sensitive_assignments() -> List[Violation]:
         tree = parse_ast(path)
         if tree is None:
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                target_names = []
-                for target in node.targets:
-                    target_names.extend(extract_target_names(target))
-                if not target_names:
-                    continue
-                lower_names = [name.lower() for name in target_names]
-                if not any(
-                    token in candidate
-                    for candidate in lower_names
-                    for token in SENSITIVE_NAME_TOKENS
-                ):
-                    continue
-                if _should_flag_assignment(target_names, node.value):
-                    violations.append(
-                        Violation(
-                            path=path,
-                            lineno=node.lineno,
-                            message=f"literal assignment {literal_value_repr(node.value)} for {', '.join(sorted(target_names))}",
-                        )
-                    )
-            if isinstance(node, ast.AnnAssign):
-                target_names = list(extract_target_names(node.target))
-                lower_names = [name.lower() for name in target_names]
-                if not any(
-                    token in candidate
-                    for candidate in lower_names
-                    for token in SENSITIVE_NAME_TOKENS
-                ):
-                    continue
-                if _should_flag_assignment(target_names, node.value):
-                    violations.append(
-                        Violation(
-                            path=path,
-                            lineno=node.lineno,
-                            message=f"annotated literal assignment {literal_value_repr(node.value)} for {', '.join(sorted(target_names))}",
-                        )
-                    )
+        violations.extend(_iter_sensitive_assignment_violations(path, tree))
     return violations
+
+
+def _call_contains_literal_arguments(node: ast.Call) -> bool:
+    arguments = list(node.args) + [kw.value for kw in node.keywords]
+    return any(contains_literal_dataset(arg) for arg in arguments)
+
+
+def _iter_dataframe_literal_violations(
+    path: Path, tree: ast.AST
+) -> Iterator[Violation]:
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        qualname = get_call_qualname(node.func)
+        if not qualname or qualname not in DATAFRAME_CALLS:
+            continue
+        if _allowlisted(qualname, "dataframe"):
+            continue
+        if _call_contains_literal_arguments(node):
+            yield Violation(
+                path=path,
+                lineno=node.lineno,
+                message=f"literal dataset passed to {qualname}",
+            )
 
 
 def collect_dataframe_literals() -> List[Violation]:
@@ -232,25 +280,55 @@ def collect_dataframe_literals() -> List[Violation]:
         tree = parse_ast(path)
         if tree is None:
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                qualname = get_call_qualname(node.func)
-                if not qualname or qualname not in DATAFRAME_CALLS:
-                    continue
-                if _allowlisted(qualname, "dataframe"):
-                    continue
-                if any(
-                    contains_literal_dataset(arg)
-                    for arg in list(node.args) + [kw.value for kw in node.keywords]
-                ):
-                    violations.append(
-                        Violation(
-                            path=path,
-                            lineno=node.lineno,
-                            message=f"literal dataset passed to {qualname}",
-                        )
-                    )
+        violations.extend(_iter_dataframe_literal_violations(path, tree))
     return violations
+
+
+def _literal_comparators(node: ast.Compare) -> list[ast.Constant]:
+    return [
+        comp
+        for comp in node.comparators
+        if is_numeric_constant(comp) and comp.value not in ALLOWED_NUMERIC_LITERALS
+    ]
+
+
+def _comparison_targets(node: ast.Compare) -> list[str]:
+    if isinstance(node.left, ast.Name):
+        return [node.left.id]
+    return []
+
+
+def _format_comparison_message(
+    comparator_literals: list[ast.Constant],
+    left_names: list[str],
+) -> str:
+    literal_repr = ", ".join(literal_value_repr(comp) for comp in comparator_literals)
+    return (
+        "comparison against literal "
+        + literal_repr
+        + f" for {', '.join(sorted(left_names))}"
+    )
+
+
+def _iter_numeric_comparison_violations(
+    path: Path, tree: ast.AST
+) -> Iterator[Violation]:
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Compare):
+            continue
+        comparator_literals = _literal_comparators(node)
+        if not comparator_literals:
+            continue
+        left_names = _comparison_targets(node)
+        if not left_names or not _contains_sensitive_token(left_names):
+            continue
+        if not _should_flag_comparison(left_names):
+            continue
+        yield Violation(
+            path=path,
+            lineno=node.lineno,
+            message=_format_comparison_message(comparator_literals, left_names),
+        )
 
 
 def collect_numeric_comparisons() -> List[Violation]:
@@ -259,41 +337,7 @@ def collect_numeric_comparisons() -> List[Violation]:
         tree = parse_ast(path)
         if tree is None:
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Compare):
-                comparator_literals = [
-                    comp
-                    for comp in node.comparators
-                    if is_numeric_constant(comp) and comp.value not in ALLOWED_NUMERIC_LITERALS  # type: ignore[attr-defined]
-                ]
-                if not comparator_literals:
-                    continue
-                left_names = []
-                for part in (node.left,):
-                    if isinstance(part, ast.Name):
-                        left_names.append(part.id)
-                if not left_names:
-                    continue
-                lower_names = [name.lower() for name in left_names]
-                if not any(
-                    token in candidate
-                    for candidate in lower_names
-                    for token in SENSITIVE_NAME_TOKENS
-                ):
-                    continue
-                if not _should_flag_comparison(left_names):
-                    continue
-                violations.append(
-                    Violation(
-                        path=path,
-                        lineno=node.lineno,
-                        message="comparison against literal "
-                        + ", ".join(
-                            literal_value_repr(comp) for comp in comparator_literals
-                        )
-                        + f" for {', '.join(sorted(left_names))}",
-                    )
-                )
+        violations.extend(_iter_numeric_comparison_violations(path, tree))
     return violations
 
 

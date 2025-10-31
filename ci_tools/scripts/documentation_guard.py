@@ -211,6 +211,68 @@ def check_required_docs(root: Path, required: List[str]) -> List[str]:
     return missing
 
 
+CATEGORY_KEYS = [
+    ("Base", "base"),
+    ("Modules", "modules"),
+    ("Architecture", "architecture"),
+    ("Domains", "domains"),
+    ("Operations", "operations"),
+    ("Reference", "reference"),
+]
+
+
+def _group_missing_docs(
+    missing: List[str], discovery_info: dict
+) -> dict[str, List[str]]:
+    grouped: dict[str, List[str]] = {label: [] for label, _ in CATEGORY_KEYS}
+    for doc in missing:
+        for label, key in CATEGORY_KEYS:
+            if doc in discovery_info.get(key, []):
+                grouped[label].append(doc)
+                break
+    return grouped
+
+
+def _print_failure_report(
+    grouped: dict[str, List[str]],
+) -> None:
+    print("Documentation Guard: FAILED", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+    print("❌ Missing required documentation:", file=sys.stderr)
+    print("", file=sys.stderr)
+    for category, docs in grouped.items():
+        if not docs:
+            continue
+        print(f"  {category}:", file=sys.stderr)
+        for doc in docs:
+            print(f"    • {doc}", file=sys.stderr)
+        print("", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+    print("Build FAILED: Create the missing documentation files.", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Requirements auto-discovered from repository structure:", file=sys.stderr)
+    print(
+        "  • Base: README.md, CLAUDE.md (if exists), docs/README.md",
+        file=sys.stderr,
+    )
+    print("  • Modules: Every directory in src/ with Python files", file=sys.stderr)
+    print(
+        "  • Architecture: docs/architecture/README.md (if architecture docs exist)",
+        file=sys.stderr,
+    )
+    print("  • Domains: Every subdirectory in docs/domains/", file=sys.stderr)
+    print(
+        "  • Operations: docs/operations/README.md (if operations dir exists)",
+        file=sys.stderr,
+    )
+    print("  • Reference: Every subdirectory in docs/reference/", file=sys.stderr)
+
+
+def _print_success(total_docs: int) -> None:
+    print("✅ documentation_guard: All required documentation present", file=sys.stderr)
+    print(f"   ({total_docs} docs verified)", file=sys.stderr)
+
+
 def main() -> int:
     args = parse_args()
     root = args.root.resolve()
@@ -226,56 +288,11 @@ def main() -> int:
     missing = check_required_docs(root, required_docs)
 
     if missing:
-        print("Documentation Guard: FAILED", file=sys.stderr)
-        print("=" * 60, file=sys.stderr)
-        print("❌ Missing required documentation:", file=sys.stderr)
-        print("", file=sys.stderr)
-
-        # Group by category for clearer output
-        missing_by_category = {
-            "Base": [],
-            "Modules": [],
-            "Architecture": [],
-            "Domains": [],
-            "Operations": [],
-            "Reference": [],
-        }
-
-        for doc in missing:
-            if doc in discovery_info.get("base", []):
-                missing_by_category["Base"].append(doc)
-            elif doc in discovery_info.get("modules", []):
-                missing_by_category["Modules"].append(doc)
-            elif doc in discovery_info.get("architecture", []):
-                missing_by_category["Architecture"].append(doc)
-            elif doc in discovery_info.get("domains", []):
-                missing_by_category["Domains"].append(doc)
-            elif doc in discovery_info.get("operations", []):
-                missing_by_category["Operations"].append(doc)
-            elif doc in discovery_info.get("reference", []):
-                missing_by_category["Reference"].append(doc)
-
-        for category, docs in missing_by_category.items():
-            if docs:
-                print(f"  {category}:", file=sys.stderr)
-                for doc in docs:
-                    print(f"    • {doc}", file=sys.stderr)
-                print("", file=sys.stderr)
-
-        print("=" * 60, file=sys.stderr)
-        print("Build FAILED: Create the missing documentation files.", file=sys.stderr)
-        print("", file=sys.stderr)
-        print("Requirements auto-discovered from repository structure:", file=sys.stderr)
-        print("  • Base: README.md, CLAUDE.md (if exists), docs/README.md", file=sys.stderr)
-        print("  • Modules: Every directory in src/ with Python files", file=sys.stderr)
-        print("  • Architecture: docs/architecture/README.md (if architecture docs exist)", file=sys.stderr)
-        print("  • Domains: Every subdirectory in docs/domains/", file=sys.stderr)
-        print("  • Operations: docs/operations/README.md (if operations dir exists)", file=sys.stderr)
-        print("  • Reference: Every subdirectory in docs/reference/", file=sys.stderr)
+        grouped = _group_missing_docs(missing, discovery_info)
+        _print_failure_report(grouped)
         return 1
 
-    print("✅ documentation_guard: All required documentation present", file=sys.stderr)
-    print(f"   ({len(required_docs)} docs verified)", file=sys.stderr)
+    _print_success(len(required_docs))
     return 0
 
 

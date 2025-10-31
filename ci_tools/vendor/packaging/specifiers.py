@@ -58,21 +58,21 @@ class Specifier:
         prefix = _STAR_PATTERN.split(self.version, 1)[0]
         return candidate.startswith(prefix)
 
-    def contains(self, candidate: str) -> bool:
-        """Return True when *candidate* satisfies this specifier."""
-
-        candidate = candidate.strip()
+    def _handle_wildcard(self, candidate: str) -> bool:
         op = self.operator
-        if "*" in self.version:
-            if op == "==":
-                return self._matches_wildcard(candidate)
-            if op == "!=":
-                return not self._matches_wildcard(candidate)
-            raise InvalidSpecifier.unsupported_wildcard_operator(op)
+        if op == "==":
+            return self._matches_wildcard(candidate)
+        if op == "!=":
+            return not self._matches_wildcard(candidate)
+        raise InvalidSpecifier.unsupported_wildcard_operator(op)
 
-        candidate_version = Version(candidate)
-        spec_version = Version(self.version)
-
+    def _compare_versions(
+        self,
+        op: str,
+        candidate_version: Version,
+        spec_version: Version,
+        raw_candidate: str,
+    ) -> bool:
         if op == "==":
             return candidate_version == spec_version
         if op == "!=":
@@ -86,12 +86,24 @@ class Specifier:
         if op == "<=":
             return candidate_version <= spec_version
         if op == "===":
-            return candidate == self.version
+            return raw_candidate == self.version
         if op == "~=":
             lower = spec_version
             upper = _compatible_upper_bound(spec_version)
             return lower <= candidate_version < upper
         raise InvalidSpecifier.unsupported_operator(op)
+
+    def contains(self, candidate: str) -> bool:
+        """Return True when *candidate* satisfies this specifier."""
+
+        candidate = candidate.strip()
+        op = self.operator
+        if "*" in self.version:
+            return self._handle_wildcard(candidate)
+
+        candidate_version = Version(candidate)
+        spec_version = Version(self.version)
+        return self._compare_versions(op, candidate_version, spec_version, candidate)
 
 
 def _compatible_upper_bound(version: Version) -> Version:

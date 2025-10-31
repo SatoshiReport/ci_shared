@@ -33,25 +33,61 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(sys.argv[1:] if argv is None else argv)
-
-    model = (
+def _resolve_model_choice(args: argparse.Namespace) -> str:
+    return (
         args.model
         or os.environ.get("CI_COMMIT_MODEL")
         or os.environ.get("OPENAI_MODEL")
         or "gpt-5-codex"
     )
-    reasoning = (
+
+
+def _resolve_reasoning_choice(args: argparse.Namespace) -> str:
+    return (
         args.reasoning
         or os.environ.get("CI_COMMIT_REASONING")
         or os.environ.get("OPENAI_REASONING_EFFORT")
         or "high"
     )
 
-    staged_diff = gather_git_diff(staged=True)
+
+def _read_staged_diff() -> str:
+    return gather_git_diff(staged=True)
+
+
+def _prepare_payload(summary: str, body_lines: list[str]) -> str:
+    body = "\n".join(line.rstrip() for line in body_lines).strip()
+    payload_lines = [summary.strip()]
+    if body:
+        payload_lines.append(body)
+    return "\n".join(payload_lines)
+
+
+def _write_payload(payload: str, output_path: Path | None) -> int | None:
+    if output_path is None:
+        print(payload)
+        return 0
+    try:
+        output_path.write_text(payload + "\n")
+    except OSError as exc:
+        print(
+            f"Failed to write commit message to {output_path}: {exc}", file=sys.stderr
+        )
+        return 1
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+
+    model = _resolve_model_choice(args)
+    reasoning = _resolve_reasoning_choice(args)
+
+    staged_diff = _read_staged_diff()
     if not staged_diff.strip():
-        print("No staged diff available for commit message generation.", file=sys.stderr)
+        print(
+            "No staged diff available for commit message generation.", file=sys.stderr
+        )
         return 1
 
     try:
@@ -67,28 +103,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     summary = summary.strip()
-    body = "\n".join(line.rstrip() for line in body_lines).strip()
-
     if not summary:
         print("Codex commit message response was empty.", file=sys.stderr)
         return 1
 
-    payload_lines: list[str] = [summary]
-    if body:
-        payload_lines.append(body)
-    payload = "\n".join(payload_lines)
-
-    output_path = args.output
-    if output_path is not None:
-        try:
-            output_path.write_text(payload + "\n")
-        except OSError as exc:
-            print(f"Failed to write commit message to {output_path}: {exc}", file=sys.stderr)
-            return 1
-    else:
-        print(payload)
-
-    return 0
+    payload = _prepare_payload(summary, body_lines)
+    result = _write_payload(payload, args.output)
+    return result if result is not None else 0
 
 
 if __name__ == "__main__":

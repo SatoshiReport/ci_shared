@@ -61,9 +61,7 @@ def count_function_lines(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     return node.end_lineno - node.lineno + 1
 
 
-def scan_file(
-    path: Path, limit: int
-) -> List[Tuple[str, str, int, int]]:
+def scan_file(path: Path, limit: int) -> List[Tuple[str, str, int, int]]:
     """Return list of (file, function, lineno, line_count) for violations."""
     try:
         content = path.read_text()
