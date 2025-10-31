@@ -16,6 +16,7 @@ export PYTHONDONTWRITEBYTECODE=1
 shared-checks:
 	@echo "Running shared CI checks..."
 	isort --profile black $(FORMAT_TARGETS)
+	black $(FORMAT_TARGETS)
 	$(PYTHON) -m compileall src tests
 	codespell --skip=".git,artifacts,models,node_modules,logs,htmlcov,*.json,*.csv" --quiet-level=2 --ignore-words=ci_shared/config/codespell_ignore_words.txt
 	vulture $(FORMAT_TARGETS) --min-confidence 80
@@ -31,7 +32,6 @@ shared-checks:
 	$(PYTHON) -m ci_tools.scripts.dependency_guard --root src --max-instantiations 5
 	$(PYTHON) -m ci_tools.scripts.unused_module_guard --root src --strict
 	$(PYTHON) -m ci_tools.scripts.documentation_guard --root .
-	black $(FORMAT_TARGETS)
 	ruff check --target-version=py310 --fix src tests
 	pyright src
 	pylint -j $(PYTEST_NODES) src tests
