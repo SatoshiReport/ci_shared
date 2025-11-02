@@ -19,14 +19,16 @@ import argparse
 import ast
 import sys
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Iterable, List, Optional, Set, Tuple
 
 
 class ImportCollector(ast.NodeVisitor):
     """Collects all import statements from a Python file."""
 
-    def __init__(self):
+    def __init__(self, file_path: Optional[Path] = None, root: Optional[Path] = None):
         self.imports: Set[str] = set()
+        self.file_path = file_path
+        self.root = root
 
     def visit_Import(self, node: ast.Import) -> None:
         """Visit 'import foo' statements."""
@@ -41,17 +43,54 @@ class ImportCollector(ast.NodeVisitor):
                 self.imports.add(".".join(parts[: i + 1]))
         self.generic_visit(node)
 
+    def _resolve_relative_import(self, node: ast.ImportFrom) -> None:
+        """Handle relative imports like 'from . import X'."""
+        if not (self.file_path and self.root):
+            return
+
+        file_module = get_module_name(self.file_path, self.root)
+        if not file_module:
+            return
+
+        parts = file_module.split(".")
+        if node.level > len(parts):
+            return
+
+        # Calculate base module path based on relative level
+        base_parts = parts[: -node.level + 1] if node.level > 1 else parts[:-1]
+        base_module = ".".join(base_parts) if base_parts else ""
+
+        # Register imported names
+        for alias in node.names:
+            if alias.name != "*":
+                if base_module:
+                    self.imports.add(f"{base_module}.{alias.name}")
+                else:
+                    self.imports.add(alias.name)
+
+    def _resolve_absolute_import(self, module: str, names: list) -> None:
+        """Handle absolute imports like 'from foo import bar'."""
+        # Strip src. prefix if present
+        if module.startswith("src."):
+            module = module[4:]
+
+        # Add module and all parent modules
+        parts = module.split(".")
+        for i in range(len(parts)):
+            self.imports.add(".".join(parts[: i + 1]))
+
+        # Add imported names as submodules
+        for alias in names:
+            if alias.name != "*":
+                self.imports.add(f"{module}.{alias.name}")
+
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Visit 'from foo import bar' statements."""
-        if node.module:
-            # Add full module path and all parent modules
-            module = node.module
-            # Strip src. prefix if present
-            if module.startswith("src."):
-                module = module[4:]
-            parts = module.split(".")
-            for i in range(len(parts)):
-                self.imports.add(".".join(parts[: i + 1]))
+        if node.module is None and node.level > 0:
+            self._resolve_relative_import(node)
+        elif node.module:
+            self._resolve_absolute_import(node.module, node.names)
+
         self.generic_visit(node)
 
 
@@ -74,7 +113,7 @@ def collect_all_imports(root: Path) -> Set[str]:
         try:
             with open(py_file, "r", encoding="utf-8") as f:
                 tree = ast.parse(f.read(), filename=str(py_file))
-            collector = ImportCollector()
+            collector = ImportCollector(file_path=py_file, root=root)
             collector.visit(tree)
             all_imports.update(collector.imports)
         except (SyntaxError, UnicodeDecodeError):
@@ -109,6 +148,55 @@ def get_module_name(file_path: Path, root: Path) -> str:
     return ".".join(parts) if parts else ""
 
 
+SUSPICIOUS_PATTERNS: Tuple[str, ...] = (
+    "_refactored",
+    "_slim",
+    "_optimized",
+    "_old",
+    "_backup",
+    "_copy",
+    "_new",
+    "_temp",
+    "_v2",
+    "_2",
+)
+
+FALSE_POSITIVE_RULES: Tuple[Tuple[str, Iterable[str]], ...] = (
+    ("_temp", ("temperature", "max_temp")),
+    ("_2", ("phase_2", "_v2")),
+)
+
+
+def _is_false_positive(stem: str) -> bool:
+    """Check if a stem matches any false positive exclusion markers."""
+    for fp_pattern, exclusions in FALSE_POSITIVE_RULES:
+        for marker in exclusions:
+            if marker in stem:
+                return True
+    return False
+
+
+def _is_false_positive_for_pattern(stem: str, pattern: str) -> bool:
+    """Check if a stem matches false positive rules for a specific pattern."""
+    for fp_pattern, exclusions in FALSE_POSITIVE_RULES:
+        if fp_pattern == pattern:
+            # Check if any exclusion marker is in the stem
+            for marker in exclusions:
+                if marker in stem:
+                    return True
+    return False
+
+
+def _duplicate_reason(stem: str) -> Optional[str]:
+    """Check if a stem contains suspicious patterns, accounting for false positives."""
+    for pattern in SUSPICIOUS_PATTERNS:
+        if pattern in stem:
+            # Check if this is a false positive for this specific pattern
+            if not _is_false_positive_for_pattern(stem, pattern):
+                return f"Suspicious duplicate pattern '{pattern}' in filename"
+    return None
+
+
 def find_suspicious_duplicates(root: Path) -> List[Tuple[Path, str]]:
     """
     Find files with suspicious naming patterns that suggest duplicates.
@@ -119,45 +207,128 @@ def find_suspicious_duplicates(root: Path) -> List[Tuple[Path, str]]:
     Returns:
         List of (file_path, reason) tuples
     """
-    suspicious_patterns = [
-        "_refactored",
-        "_slim",
-        "_optimized",
-        "_old",
-        "_backup",
-        "_copy",
-        "_new",
-        "_temp",
-        "_v2",
-        "_2",
-    ]
-
     duplicates: List[Tuple[Path, str]] = []
 
     for py_file in root.rglob("*.py"):
         if "__pycache__" in str(py_file):
             continue
 
-        stem = py_file.stem
-
-        # Skip false positives
-        if "_temp" in stem and ("temperature" in stem or "max_temp" in stem):
-            continue
-        if "_2" in stem and ("phase_2" in stem or "_v2" in stem):
-            continue
-
-        for pattern in suspicious_patterns:
-            if pattern in stem:
-                duplicates.append(
-                    (py_file, f"Suspicious duplicate pattern '{pattern}' in filename")
-                )
-                break
+        reason = _duplicate_reason(py_file.stem)
+        if reason:
+            duplicates.append((py_file, reason))
 
     return duplicates
 
 
+def _collect_all_imports_with_parent(root: Path) -> Set[str]:
+    imports = collect_all_imports(root)
+    parent = root.parent
+    if parent.exists():
+        imports.update(collect_all_imports(parent))
+    return imports
+
+
+def _is_cli_entry_point(py_file: Path) -> bool:
+    """
+    Check if a file is a CLI entry point (has main() and if __name__ == "__main__").
+
+    CLI entry points are meant to be executed directly (e.g., python -m module)
+    rather than imported, so they don't need to appear in import statements.
+    """
+    try:
+        with open(py_file, "r", encoding="utf-8") as f:
+            content = f.read()
+            tree = ast.parse(content, filename=str(py_file))
+
+        # Check for if __name__ == "__main__": pattern
+        has_main_guard = 'if __name__ == "__main__"' in content
+
+        # Check for main() function definition
+        has_main_function = any(
+            isinstance(node, ast.FunctionDef) and node.name == "main"
+            for node in ast.walk(tree)
+        )
+
+        return has_main_guard and has_main_function
+    except (SyntaxError, UnicodeDecodeError, FileNotFoundError, OSError):
+        return False
+
+
+def _should_skip_file(py_file: Path, exclude_patterns: List[str]) -> bool:
+    if "__pycache__" in str(py_file):
+        return True
+    if any(pattern in str(py_file) for pattern in exclude_patterns):
+        return True
+    # Skip __main__.py and main.py as they are entry points
+    if py_file.name in ("__main__.py", "main.py"):
+        return True
+    # Skip CLI entry points (files with main() and if __name__ == "__main__")
+    return _is_cli_entry_point(py_file)
+
+
+def _check_exact_match(module_name: str, file_stem: str, all_imports: Set[str]) -> bool:
+    """Check for exact module name matches."""
+    if module_name in all_imports:
+        return True
+    if f"src.{module_name}" in all_imports:
+        return True
+    if file_stem in all_imports:
+        return True
+    return False
+
+
+def _check_child_imported(module_name: str, all_imports: Set[str]) -> bool:
+    """Check if any child module is imported."""
+    for imported in all_imports:
+        if imported.startswith(module_name + "."):
+            return True
+        if imported.startswith(f"src.{module_name}."):
+            return True
+    return False
+
+
+def _has_specific_child_imports(
+    parent: str, module_name: str, all_imports: Set[str]
+) -> bool:
+    """Check if parent has specific child imports that exclude this module."""
+    return any(
+        imp.startswith(parent + ".") and imp != module_name for imp in all_imports
+    )
+
+
+def _check_parent_imported(module_name: str, all_imports: Set[str]) -> bool:
+    """Check if a parent module is imported wholesale."""
+    module_parts = module_name.split(".")
+    for i in range(len(module_parts) - 1):
+        parent = ".".join(module_parts[: i + 1])
+        if parent in all_imports or f"src.{parent}" in all_imports:
+            if not _has_specific_child_imports(parent, module_name, all_imports):
+                return True
+    return False
+
+
+def _module_is_imported(
+    module_name: str,
+    file_stem: str,
+    all_imports: Set[str],
+) -> bool:
+    if not module_name:
+        return True
+
+    if _check_exact_match(module_name, file_stem, all_imports):
+        return True
+
+    if _check_child_imported(module_name, all_imports):
+        return True
+
+    if _check_parent_imported(module_name, all_imports):
+        return True
+
+    return False
+
+
 def find_unused_modules(
-    root: Path, exclude_patterns: List[str] = None
+    root: Path, exclude_patterns: Optional[List[str]] = None
 ) -> List[Tuple[Path, str]]:
     """
     Find Python modules that are never imported.
@@ -169,52 +340,19 @@ def find_unused_modules(
     Returns:
         List of (file_path, reason) tuples for unused modules
     """
-    if exclude_patterns is None:
-        exclude_patterns = []
-
-    # Collect all imports from all files
-    all_imports = collect_all_imports(root)
-
-    # Also check parent directory for imports of this package
-    if root.parent.exists():
-        parent_imports = collect_all_imports(root.parent)
-        all_imports.update(parent_imports)
-
+    exclude_patterns = list(exclude_patterns or [])
+    all_imports = _collect_all_imports_with_parent(root)
     unused: List[Tuple[Path, str]] = []
 
     for py_file in root.rglob("*.py"):
-        if "__pycache__" in str(py_file):
+        if _should_skip_file(py_file, exclude_patterns):
             continue
 
-        # Skip excluded patterns
-        if any(pattern in str(py_file) for pattern in exclude_patterns):
-            continue
-
-        # Skip __main__.py (entry points)
-        if py_file.name == "__main__.py":
-            continue
-
-        # Get module name
         module_name = get_module_name(py_file, root)
-        if not module_name:
+        if _module_is_imported(module_name, py_file.stem, all_imports):
             continue
 
-        # Check if this module or any parent module is imported
-        module_parts = module_name.split(".")
-        is_imported = False
-
-        for i in range(len(module_parts)):
-            partial_module = ".".join(module_parts[: i + 1])
-            if partial_module in all_imports:
-                is_imported = True
-                break
-
-        # Also check just the filename without path
-        if py_file.stem in all_imports:
-            is_imported = True
-
-        if not is_imported:
-            unused.append((py_file, f"Never imported (module: {module_name})"))
+        unused.append((py_file, f"Never imported (module: {module_name})"))
 
     return unused
 
@@ -228,8 +366,7 @@ def main() -> int:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("src"),
-        help="Root directory to check (default: src)",
+        help="Root directory to check (initial: src)",
     )
     parser.add_argument(
         "--strict",
@@ -239,9 +376,9 @@ def main() -> int:
     parser.add_argument(
         "--exclude",
         nargs="+",
-        default=["__init__.py", "conftest.py"],
         help="Patterns to exclude from unused checks",
     )
+    parser.set_defaults(root=Path("src"), exclude=["__init__.py", "conftest.py"])
 
     args = parser.parse_args()
 

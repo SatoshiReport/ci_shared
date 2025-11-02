@@ -21,32 +21,33 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("src"),
-        help="Directory to scan for Python modules (defaults to ./src).",
+        help="Directory to scan for Python modules (initial: ./src).",
     )
     parser.add_argument(
         "--max-public-methods",
         type=int,
-        default=15,
-        help="Maximum allowed public methods per class (default: 15).",
+        help="Maximum allowed public methods per class (initial: 15).",
     )
     parser.add_argument(
         "--max-total-methods",
         type=int,
-        default=25,
-        help="Maximum allowed total methods (public + private) per class (default: 25).",
+        help="Maximum allowed total methods (public + private) per class (initial: 25).",
     )
     parser.add_argument(
         "--exclude",
         action="append",
         type=Path,
-        default=[],
         help="Path prefix to exclude from the scan (may be passed multiple times).",
+    )
+    parser.set_defaults(
+        root=Path("src"), max_public_methods=15, max_total_methods=25, exclude=[]
     )
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
 def iter_python_files(root: Path) -> Iterable[Path]:
+    if not root.exists():
+        raise OSError(f"path does not exist: {root}")
     if root.is_file():
         if root.suffix == ".py":
             yield root
@@ -82,8 +83,8 @@ def count_methods(node: ast.ClassDef) -> Tuple[int, int]:
         if not isinstance(item, ast.FunctionDef):
             continue
 
-        # Skip dunder methods
-        if item.name.startswith("__") and item.name.endswith("__"):
+        # Skip dunder methods and name-mangled methods
+        if item.name.startswith("__"):
             continue
 
         # Skip properties (they're data access, not behavior)

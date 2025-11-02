@@ -9,6 +9,7 @@ from .models import CoverageCheckResult, CoverageDeficit
 
 
 def _find_coverage_table(lines: list[str]) -> Optional[list[str]]:
+    """Return the lines that compose the coverage table in the pytest report."""
     header_index: Optional[int] = None
     for idx, line in enumerate(lines):
         stripped = line.strip()
@@ -29,6 +30,7 @@ def _parse_coverage_entries(
     rows: list[str],
     threshold: float,
 ) -> list[CoverageDeficit]:
+    """Parse coverage table rows and collect deficits below the given threshold."""
     deficits: list[CoverageDeficit] = []
     for row in rows:
         stripped = row.strip()
@@ -55,6 +57,7 @@ def _parse_coverage_entries(
 def extract_coverage_deficits(
     output: str, *, threshold: float = COVERAGE_THRESHOLD
 ) -> Optional[CoverageCheckResult]:
+    """Extract modules that fall below the coverage threshold from pytest output."""
     if not output:
         return None
     table = _find_coverage_table(output.splitlines())

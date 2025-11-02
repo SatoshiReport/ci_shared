@@ -21,26 +21,26 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("src"),
-        help="Directory to scan for Python modules (defaults to ./src).",
+        help="Directory to scan for Python modules (initial: ./src).",
     )
     parser.add_argument(
         "--max-instantiations",
         type=int,
-        default=8,
-        help="Maximum allowed object instantiations in __init__/__post_init__ (default: 8).",
+        help="Maximum allowed object instantiations in __init__/__post_init__ (initial: 8).",
     )
     parser.add_argument(
         "--exclude",
         action="append",
         type=Path,
-        default=[],
         help="Path prefix to exclude from the scan (may be passed multiple times).",
     )
+    parser.set_defaults(root=Path("src"), max_instantiations=8, exclude=[])
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
 def iter_python_files(root: Path) -> Iterable[Path]:
+    if not root.exists():
+        raise OSError(f"Path does not exist: {root}")
     if root.is_file():
         if root.suffix == ".py":
             yield root
@@ -99,7 +99,9 @@ def count_instantiations(func_node: ast.FunctionDef) -> Tuple[int, List[str]]:
     return count, instantiated_classes
 
 
-def scan_file(path: Path, max_instantiations: int) -> List[Tuple[Path, str, int, int, List[str]]]:
+def scan_file(
+    path: Path, max_instantiations: int
+) -> List[Tuple[Path, str, int, int, List[str]]]:
     """Return list of (path, class_name, line, count, classes) for violations."""
     source = path.read_text()
     try:
@@ -122,9 +124,7 @@ def scan_file(path: Path, max_instantiations: int) -> List[Tuple[Path, str, int,
 
             count, instantiated = count_instantiations(item)
             if count > max_instantiations:
-                violations.append(
-                    (path, node.name, node.lineno, count, instantiated)
-                )
+                violations.append((path, node.name, node.lineno, count, instantiated))
 
     return violations
 

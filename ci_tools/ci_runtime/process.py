@@ -18,12 +18,14 @@ def _run_command_buffered(
     check: bool,
     env: dict[str, str],
 ) -> CommandResult:
+    """Run a subprocess and capture its output without streaming."""
     process = subprocess.run(
         args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         env=env,
+        check=False,
     )
     if check and process.returncode != 0:
         raise subprocess.CalledProcessError(
@@ -40,6 +42,7 @@ def _run_command_buffered(
 
 
 def _stream_pipe(pipe, collector: list[str], target) -> None:
+    """Collect text from a pipe while forwarding it to the provided stream."""
     try:
         for line in iter(pipe.readline, ""):
             collector.append(line)
@@ -55,42 +58,42 @@ def _run_command_streaming(
     check: bool,
     env: dict[str, str],
 ) -> CommandResult:
-    process = subprocess.Popen(
+    """Stream stdout/stderr live while accumulating the full text."""
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+    with subprocess.Popen(
         args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
         env=env,
-    )
+    ) as process:
+        threads: list[threading.Thread] = []
 
-    stdout_lines: list[str] = []
-    stderr_lines: list[str] = []
-    threads: list[threading.Thread] = []
-
-    if process.stdout:
-        threads.append(
-            threading.Thread(
-                target=_stream_pipe,
-                args=(process.stdout, stdout_lines, sys.stdout),
-                daemon=True,
+        if process.stdout:
+            threads.append(
+                threading.Thread(
+                    target=_stream_pipe,
+                    args=(process.stdout, stdout_lines, sys.stdout),
+                    daemon=True,
+                )
             )
-        )
-    if process.stderr:
-        threads.append(
-            threading.Thread(
-                target=_stream_pipe,
-                args=(process.stderr, stderr_lines, sys.stderr),
-                daemon=True,
+        if process.stderr:
+            threads.append(
+                threading.Thread(
+                    target=_stream_pipe,
+                    args=(process.stderr, stderr_lines, sys.stderr),
+                    daemon=True,
+                )
             )
-        )
 
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
-    returncode = process.wait()
+        returncode = process.wait()
     stdout_text = "".join(stdout_lines)
     stderr_text = "".join(stderr_lines)
 
@@ -127,26 +130,31 @@ def run_command(
 
 
 def tail_text(text: str, lines: int) -> str:
+    """Return the last *lines* lines from the provided multiline string."""
     return "\n".join(text.splitlines()[-lines:])
 
 
 def gather_git_diff(*, staged: bool = False) -> str:
+    """Return the git diff for staged or unstaged changes."""
     args = ["git", "diff", "--cached"] if staged else ["git", "diff"]
     result = run_command(args)
     return result.stdout
 
 
 def gather_git_status() -> str:
+    """Return a short git status suitable for prompt summaries."""
     result = run_command(["git", "status", "--short"])
     return result.stdout.strip()
 
 
 def gather_file_diff(path: str) -> str:
+    """Return the diff for a single path relative to HEAD."""
     result = run_command(["git", "diff", path])
     return result.stdout
 
 
 def log_codex_interaction(kind: str, prompt: str, response: str) -> None:
+    """Append the interaction to logs/codex_ci.log for later auditing."""
     log_dir = Path("logs")
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "codex_ci.log"

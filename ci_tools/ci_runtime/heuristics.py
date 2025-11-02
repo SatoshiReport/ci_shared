@@ -18,6 +18,7 @@ ATTRIBUTE_ERROR_PATTERN = re.compile(
 
 
 def detect_missing_symbol_error(log_excerpt: str) -> Optional[str]:
+    """Return a guidance string when an ImportError indicates a missing symbol."""
     match = IMPORT_ERROR_PATTERN.search(log_excerpt)
     if not match:
         return None
@@ -29,6 +30,7 @@ def detect_missing_symbol_error(log_excerpt: str) -> Optional[str]:
 
 
 def detect_attribute_error(log_excerpt: str) -> Optional[str]:
+    """Return a guidance string for AttributeError messages referencing repo files."""
     match = ATTRIBUTE_ERROR_PATTERN.search(log_excerpt)
     if not match:
         return None
@@ -56,6 +58,7 @@ def detect_attribute_error(log_excerpt: str) -> Optional[str]:
 
 
 def summarize_failure(log_excerpt: str) -> tuple[str, List[str]]:
+    """Summarize failing file locations detected in the log excerpt."""
     lines = log_excerpt.splitlines()
     pyright_matches: List[Tuple[str, str]] = []
     for line in lines:

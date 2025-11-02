@@ -19,7 +19,23 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["jinja2>=3.1.0"]
+dev = [
+    "jinja2>=3.1.0",
+    "coverage>=7.5.0",
+    "radon>=6.0.1",
+]
+
+[tool.deptry]
+root = ["ci_tools", "scripts"]
+exclude = ["tests"]
+known_first_party = ["ci_tools"]
+
+[tool.deptry.per_rule_ignores]
+DEP002 = ["jinja2"]
+DEP003 = [
+    "ci_tools/scripts/coverage_guard.py:coverage",
+    "scripts/complexity_guard.py:radon",
+]
 
 [tool.setuptools]
 packages = ["ci_tools"]
@@ -29,3 +45,11 @@ script-files = ["ci_tools/scripts/xci.sh"]
 [tool.setuptools.package-data]
 ci_tools = ["scripts/*.sh", "scripts/*.py", "vendor/**/*"]
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.coverage.run]
+omit = [
+    "*/vendor/*",
+    "*/__main__.py",
+]

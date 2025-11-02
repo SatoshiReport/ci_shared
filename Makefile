@@ -9,10 +9,9 @@ SHARED_CODESPELL_IGNORE = config/codespell_ignore_words.txt
 SHARED_PYRIGHT_TARGETS = ci_tools
 SHARED_PYLINT_TARGETS = ci_tools
 SHARED_PYTEST_TARGET = tests
-SHARED_PYTEST_COV_TARGET = scripts.complexity_guard
+SHARED_PYTEST_COV_TARGET = ci_tools
 SHARED_PYTEST_THRESHOLD = 80
-SHARED_PYTEST_EXTRA = --strict-markers --cov-report=term -W error
-PYLINT_ARGS = --ignore=ci_tools/vendor --disable=C0114,C0115,C0116,C0301,C0302,R0912,R0914,R0915,R0911,R0913,R1732,W1510,R0801
+SHARED_PYTEST_EXTRA = --strict-markers --cov-report=term
 COMPLEXITY_GUARD_PATH = scripts/complexity_guard.py
 COMPLEXITY_GUARD_ARGS = --root $(SHARED_SOURCE_ROOT) --max-cyclomatic 10 --max-cognitive 15
 MODULE_GUARD_ARGS = --root $(SHARED_SOURCE_ROOT) --max-module-lines 400

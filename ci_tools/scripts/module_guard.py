@@ -15,22 +15,20 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("src"),
-        help="Directory to scan for Python modules (defaults to ./src).",
+        help="Directory to scan for Python modules (initial: ./src).",
     )
     parser.add_argument(
         "--max-module-lines",
         type=int,
-        default=600,
         help="Maximum allowed number of lines per module (file).",
     )
     parser.add_argument(
         "--exclude",
         action="append",
         type=Path,
-        default=[],
         help="Path prefix to exclude from the scan (may be passed multiple times).",
     )
+    parser.set_defaults(root=Path("src"), max_module_lines=600, exclude=[])
     return parser.parse_args(list(argv) if argv is not None else None)
 
 

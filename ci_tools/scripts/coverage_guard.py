@@ -49,19 +49,21 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--threshold",
         type=float,
-        default=float(os.environ.get("ZEUS_COVERAGE_THRESHOLD", "80")),
-        help="Required per-file coverage percentage (default: 80).",
+        help="Required per-file coverage percentage (initial: 80).",
     )
     parser.add_argument(
         "--data-file",
-        default=None,
-        help="Coverage data file (defaults to COVERAGE_FILE or .coverage).",
+        help="Coverage data file (initial: COVERAGE_FILE or .coverage).",
     )
     parser.add_argument(
         "--include",
         action="append",
-        default=[],
-        help="Relative path prefixes to check (repeatable). Defaults to repo root.",
+        help="Relative path prefixes to check (repeatable). Initial: repo root.",
+    )
+    parser.set_defaults(
+        threshold=float(os.environ.get("ZEUS_COVERAGE_THRESHOLD") or "80"),
+        data_file=None,
+        include=[],
     )
     return parser.parse_args(argv)
 
@@ -89,7 +91,10 @@ def should_include(path: Path, prefixes: Sequence[Path]) -> bool:
         return False
     if not prefixes:
         return True
-    return any(path == prefix or str(path).startswith(str(prefix) + os.sep) for prefix in prefixes)
+    return any(
+        path == prefix or str(path).startswith(str(prefix) + os.sep)
+        for prefix in prefixes
+    )
 
 
 def collect_results(cov: Coverage, prefixes: Sequence[Path]) -> List[CoverageResult]:
@@ -123,7 +128,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     data_file = resolve_data_file(args.data_file)
     if not data_file.exists():
-        print(f"coverage_guard: coverage data file not found: {data_file}", file=sys.stderr)
+        print(
+            f"coverage_guard: coverage data file not found: {data_file}",
+            file=sys.stderr,
+        )
         return 1
     cov = Coverage(data_file=str(data_file))
     prefixes = normalize_prefixes(args.include)
@@ -140,8 +148,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ]
     if failures:
         print(
-            "coverage_guard: per-file coverage below threshold "
-            f"({threshold:.2f}%):",
+            "coverage_guard: per-file coverage below threshold " f"({threshold:.2f}%):",
             file=sys.stderr,
         )
         for result in failures:

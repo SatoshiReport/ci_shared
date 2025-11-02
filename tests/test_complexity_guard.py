@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import textwrap
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
 
-from scripts import complexity_guard
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import complexity_guard
 
 
 def write_module(path: Path, source: str) -> None:

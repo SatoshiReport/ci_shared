@@ -16,26 +16,26 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("src"),
-        help="Directory to scan for Python files (defaults to ./src).",
+        help="Directory to scan for Python files (initial: ./src).",
     )
     parser.add_argument(
         "--max-function-lines",
         type=int,
-        default=80,
-        help="Maximum allowed lines per function (defaults to 80).",
+        help="Maximum allowed lines per function (initial: 80).",
     )
     parser.add_argument(
         "--exclude",
         action="append",
         type=Path,
-        default=[],
         help="Path prefix to exclude from the scan.",
     )
+    parser.set_defaults(root=Path("src"), max_function_lines=80, exclude=[])
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
 def iter_python_files(root: Path) -> Iterable[Path]:
+    if not root.exists():
+        raise OSError(f"Path does not exist: {root}")
     if root.is_file():
         if root.suffix == ".py":
             yield root

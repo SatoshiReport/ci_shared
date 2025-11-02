@@ -2,13 +2,60 @@
 
 from __future__ import annotations
 
-from . import ci_runtime as _ci_runtime
+from .ci_runtime import (
+    PatchPrompt,
+    apply_patch,
+    build_codex_command,
+    build_failure_context,
+    commit_and_push,
+    configure_runtime,
+    extract_coverage_deficits,
+    extract_unified_diff,
+    finalize_worktree,
+    gather_file_diff,
+    gather_git_diff,
+    gather_git_status,
+    has_unified_diff_header,
+    invoke_codex,
+    log_codex_interaction,
+    main,
+    patch_looks_risky,
+    perform_dry_run,
+    request_and_apply_patches,
+    request_codex_patch,
+    request_commit_message,
+    run_command,
+    run_repair_iterations,
+    tail_text,
+    truncate_diff_summary,
+    truncate_error,
+)
 
-__all__ = tuple(getattr(_ci_runtime, "__all__", ()))
-for _name in __all__:
-    globals()[_name] = getattr(_ci_runtime, _name)
-
-# Explicit aliases for static type checkers
-main = _ci_runtime.main
-gather_git_diff = _ci_runtime.gather_git_diff
-request_commit_message = _ci_runtime.request_commit_message
+__all__ = [
+    "apply_patch",
+    "build_codex_command",
+    "build_failure_context",
+    "commit_and_push",
+    "configure_runtime",
+    "extract_coverage_deficits",
+    "extract_unified_diff",
+    "finalize_worktree",
+    "gather_file_diff",
+    "gather_git_diff",
+    "gather_git_status",
+    "has_unified_diff_header",
+    "invoke_codex",
+    "log_codex_interaction",
+    "main",
+    "patch_looks_risky",
+    "perform_dry_run",
+    "request_and_apply_patches",
+    "request_codex_patch",
+    "request_commit_message",
+    "run_command",
+    "run_repair_iterations",
+    "tail_text",
+    "truncate_diff_summary",
+    "truncate_error",
+    "PatchPrompt",
+]

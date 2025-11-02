@@ -14,34 +14,19 @@ from .models import (
     PatchApplyError,
     PatchAttemptState,
     PatchLifecycleAbort,
+    PatchPrompt,
     RuntimeOptions,
 )
 from .patching import apply_patch, patch_looks_risky
 from .process import gather_git_diff, gather_git_status
 
 
-def _obtain_patch_diff(
-    *,
-    args,
-    options: RuntimeOptions,
-    failure_ctx: FailureContext,
-    iteration: int,
-    git_status: str,
-    git_diff: str,
-    state: PatchAttemptState,
-) -> str:
+def _obtain_patch_diff(*, options: RuntimeOptions, prompt: PatchPrompt) -> str:
+    """Request a patch from Codex and return its diff text."""
     response = request_codex_patch(
         model=options.model_name,
         reasoning_effort=options.reasoning_effort,
-        command=args.command,
-        log_excerpt=failure_ctx.log_excerpt,
-        summary=failure_ctx.summary,
-        focused_diff=failure_ctx.focused_diff,
-        git_diff=git_diff,
-        git_status=git_status,
-        iteration=iteration,
-        patch_error=state.last_error,
-        attempt=state.patch_attempt,
+        prompt=prompt,
     )
     diff_text = extract_unified_diff(response or "")
     if not diff_text:
@@ -55,6 +40,7 @@ def _validate_patch_candidate(
     seen_patches: Set[str],
     max_patch_lines: int,
 ) -> Optional[str]:
+    """Return a validation error string when the diff should be rejected."""
     if diff_text in seen_patches:
         return "Duplicate patch received; provide an alternative diff."
     seen_patches.add(diff_text)
@@ -71,6 +57,7 @@ def _apply_patch_candidate(
     *,
     state: PatchAttemptState,
 ) -> bool:
+    """Apply the diff and update state, returning True on success."""
     try:
         apply_patch(diff_text)
     except PatchApplyError as exc:
@@ -88,6 +75,7 @@ def _should_apply_patch(
     approval_mode: str,
     attempt: int,
 ) -> bool:
+    """Return True when the user (or automation) approves applying the patch."""
     if approval_mode == "auto":
         print(f"[codex] Auto-approving patch attempt {attempt}.")
         return True
@@ -107,23 +95,23 @@ def request_and_apply_patches(
     options: RuntimeOptions,
     failure_ctx: FailureContext,
     iteration: int,
-    git_status: str,
-    git_diff: str,
     seen_patches: Set[str],
 ) -> None:
+    """Iteratively request and apply patches until one succeeds or retries are exhausted."""
     state = PatchAttemptState(max_attempts=args.patch_retries + 1)
     while True:
         state.ensure_budget()
         print(f"[codex] Requesting patch attempt {state.patch_attempt}...")
-        diff_text = _obtain_patch_diff(
-            args=args,
-            options=options,
-            failure_ctx=failure_ctx,
+        prompt = PatchPrompt(
+            command=args.command,
+            failure_context=failure_ctx,
+            git_diff=gather_git_diff(staged=False),
+            git_status=gather_git_status(),
             iteration=iteration,
-            git_status=git_status,
-            git_diff=git_diff,
-            state=state,
+            patch_error=state.last_error,
+            attempt=state.patch_attempt,
         )
+        diff_text = _obtain_patch_diff(options=options, prompt=prompt)
         validation_error = _validate_patch_candidate(
             diff_text,
             seen_patches=seen_patches,
@@ -146,8 +134,9 @@ def request_and_apply_patches(
             else:
                 print("[info] Working tree is clean after applying patch.")
             return
-        git_status = gather_git_status()
-        git_diff = gather_git_diff(staged=False)
+        # Defensive check: ensure state was updated when apply fails
+        if not state.last_error:
+            state.record_failure("Patch application failed", retryable=False)
 
 
 __all__ = ["request_and_apply_patches"]

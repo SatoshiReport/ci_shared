@@ -12,6 +12,7 @@ from .models import PatchApplyError
 
 
 def _extract_diff_paths(patch_text: str) -> set[str]:
+    """Return protected file paths touched by the diff headers."""
     protected_paths: set[str] = set()
     for line in patch_text.splitlines():
         if not line.startswith("diff --git"):
@@ -27,6 +28,7 @@ def _extract_diff_paths(patch_text: str) -> set[str]:
 
 
 def patch_looks_risky(patch_text: str, *, max_lines: int) -> tuple[bool, Optional[str]]:
+    """Evaluate a Codex patch suggestion for risky patterns or size limits."""
     if not patch_text:
         msg = "Patch content was empty."
         return True, msg
@@ -48,16 +50,19 @@ def patch_looks_risky(patch_text: str, *, max_lines: int) -> tuple[bool, Optiona
 
 
 def _ensure_trailing_newline(patch_text: str) -> str:
+    """Guarantee the diff ends with a newline for `patch` compatibility."""
     return patch_text if patch_text.endswith("\n") else f"{patch_text}\n"
 
 
 def _apply_patch_with_git(patch_text: str) -> tuple[bool, str]:
+    """Attempt to apply the patch using git; return (applied?, diagnostics)."""
     git_check = subprocess.run(
         ["git", "apply", "--check", "--whitespace=nowarn"],
         input=patch_text,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        check=False,
     )
     check_output = (git_check.stdout or "") + (git_check.stderr or "")
     if git_check.returncode != 0:
@@ -68,6 +73,7 @@ def _apply_patch_with_git(patch_text: str) -> tuple[bool, str]:
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        check=False,
     )
     if git_apply.returncode != 0:
         output = (git_apply.stdout or "") + (git_apply.stderr or "")
@@ -78,12 +84,14 @@ def _apply_patch_with_git(patch_text: str) -> tuple[bool, str]:
 
 
 def _patch_already_applied(patch_text: str) -> bool:
+    """Return True when the diff has already been applied to the worktree."""
     git_reverse_check = subprocess.run(
         ["git", "apply", "--check", "--reverse", "--whitespace=nowarn"],
         input=patch_text,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        check=False,
     )
     if git_reverse_check.returncode == 0:
         print("[info] Patch already applied according to `git apply`; skipping.")
@@ -96,8 +104,10 @@ def _apply_patch_with_patch_tool(
     *,
     check_output: str,
 ) -> None:
+    """Fallback to the `patch` utility when git cannot apply the diff."""
     env = dict(os.environ)
-    env.setdefault("PATCH_CREATE_BACKUP", "no")
+    if "PATCH_CREATE_BACKUP" not in env:
+        env["PATCH_CREATE_BACKUP"] = "no"
     dry_run_cmd = [
         "patch",
         "--batch",
@@ -113,6 +123,7 @@ def _apply_patch_with_patch_tool(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=env,
+        check=False,
     )
     if dry_run.returncode != 0:
         dry_output = (dry_run.stdout or "") + (dry_run.stderr or "")
@@ -129,6 +140,7 @@ def _apply_patch_with_patch_tool(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=env,
+        check=False,
     )
     if actual.returncode != 0:
         output = (actual.stdout or "") + (actual.stderr or "")
@@ -138,6 +150,7 @@ def _apply_patch_with_patch_tool(
 
 
 def apply_patch(patch_text: str) -> None:
+    """Apply a diff using git when possible, then fall back to POSIX patch."""
     normalized = _ensure_trailing_newline(patch_text)
     applied, check_output = _apply_patch_with_git(normalized)
     if applied:

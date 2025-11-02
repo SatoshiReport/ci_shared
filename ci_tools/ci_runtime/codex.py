@@ -9,11 +9,12 @@ import threading
 from typing import Optional
 
 from .config import RISKY_PATTERNS
-from .models import CodexCliError
+from .models import CodexCliError, PatchPrompt
 from .process import log_codex_interaction
 
 
 def build_codex_command(model: str, reasoning_effort: Optional[str]) -> list[str]:
+    """Return the CLI invocation for the codex binary."""
     command = ["codex", "exec", "--model", model, "-"]
     if reasoning_effort:
         command.insert(-1, "-c")
@@ -22,6 +23,7 @@ def build_codex_command(model: str, reasoning_effort: Optional[str]) -> list[str
 
 
 def _feed_prompt(process: subprocess.Popen[str], prompt: str) -> None:
+    """Send the prompt to the Codex subprocess and close stdin."""
     try:
         if process.stdin:
             process.stdin.write(prompt)
@@ -31,6 +33,7 @@ def _feed_prompt(process: subprocess.Popen[str], prompt: str) -> None:
 
 
 def _stream_output(process: subprocess.Popen[str]) -> tuple[list[str], list[str]]:
+    """Read stdout and stderr from the Codex subprocess concurrently."""
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
 
@@ -69,21 +72,23 @@ def invoke_codex(
     description: str,
     reasoning_effort: Optional[str],
 ) -> str:
+    """Execute the Codex CLI and return the assistant's response text."""
     command = build_codex_command(model, reasoning_effort)
-    process = subprocess.Popen(
+    with subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
-    )
-    feeder = threading.Thread(target=_feed_prompt, args=(process, prompt), daemon=True)
-    feeder.start()
-    feeder.join()
-
-    stdout_lines, stderr_lines = _stream_output(process)
-    returncode = process.wait()
+    ) as process:
+        feeder = threading.Thread(
+            target=_feed_prompt, args=(process, prompt), daemon=True
+        )
+        feeder.start()
+        feeder.join()
+        stdout_lines, stderr_lines = _stream_output(process)
+        returncode = process.wait()
     stdout = "".join(stdout_lines).strip()
     stderr = "".join(stderr_lines).strip()
 
@@ -99,6 +104,7 @@ def invoke_codex(
 
 
 def truncate_error(error: Optional[str], limit: int = 2000) -> str:
+    """Shorten an error message for inclusion in Codex prompts."""
     if not error:
         return "(none)"
     text = error.strip()
@@ -108,6 +114,7 @@ def truncate_error(error: Optional[str], limit: int = 2000) -> str:
 
 
 def extract_unified_diff(response_text: str) -> Optional[str]:
+    """Return the first diff block extracted from a Codex response."""
     if not response_text:
         return None
     if response_text.strip().upper() == "NOOP":
@@ -123,6 +130,7 @@ def extract_unified_diff(response_text: str) -> Optional[str]:
 
 
 def has_unified_diff_header(diff_text: str) -> bool:
+    """Return True if the text contains the expected unified diff headers."""
     return bool(re.search(r"^(diff --git|--- |\+\+\+ )", diff_text, re.MULTILINE))
 
 
@@ -130,47 +138,40 @@ def request_codex_patch(
     *,
     model: str,
     reasoning_effort: str,
-    command: str,
-    log_excerpt: str,
-    summary: str,
-    focused_diff: str,
-    git_diff: str,
-    git_status: str,
-    iteration: int,
-    patch_error: Optional[str],
-    attempt: int,
+    prompt: PatchPrompt,
 ) -> str:
-    prompt = textwrap.dedent(
+    """Ask Codex for a patch diff based on the supplied failure context."""
+    prompt_text = textwrap.dedent(
         f"""\
         You are currently iterating on automated CI repairs.
 
         Context:
-        - CI command: `{command}`
-        - Iteration: {iteration}
-        - Patch attempt: {attempt}
+        - CI command: `{prompt.command}`
+        - Iteration: {prompt.iteration}
+        - Patch attempt: {prompt.attempt}
         - Git status:
-        {git_status or '(clean)'}
+        {prompt.git_status or '(clean)'}
 
         Failure summary:
-        {summary or '(not detected)'}
+        {prompt.failure_context.summary or '(not detected)'}
 
         Focused diff for implicated files:
         ```diff
-        {focused_diff or '/* no focused diff */'}
+        {prompt.failure_context.focused_diff or '/* no focused diff */'}
         ```
 
         Current diff (unstaged working tree):
         ```diff
-        {git_diff or '/* no diff */'}
+        {prompt.git_diff or '/* no diff */'}
         ```
 
         Latest CI failure log (tail):
         ```
-        {log_excerpt}
+        {prompt.failure_context.log_excerpt}
         ```
 
         Previous patch apply error:
-        {truncate_error(patch_error)}
+        {truncate_error(prompt.patch_error)}
 
         Instructions:
         - Respond ONLY with a unified diff (include `diff --git`, `---`, and `+++` lines) that can be applied with `patch -p1`.
@@ -180,7 +181,7 @@ def request_codex_patch(
         """
     )
     return invoke_codex(
-        prompt,
+        prompt_text,
         model=model,
         description="patch suggestion",
         reasoning_effort=reasoning_effort,
@@ -190,6 +191,7 @@ def request_codex_patch(
 def truncate_diff_summary(
     diff_text: str, line_limit: int
 ) -> tuple[bool, Optional[str]]:
+    """Return whether a diff exceeds the allowed change budget."""
     changed_lines = sum(
         1 for line in diff_text.splitlines() if line.startswith(("+", "-"))
     )
@@ -202,6 +204,7 @@ def truncate_diff_summary(
 
 
 def risky_pattern_in_diff(diff_text: str) -> Optional[str]:
+    """Return the first risky pattern matched within the diff text."""
     for pattern in RISKY_PATTERNS:
         if pattern.search(diff_text):
             return pattern.pattern

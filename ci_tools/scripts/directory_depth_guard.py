@@ -15,22 +15,20 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("src"),
-        help="Directory to scan (defaults to ./src).",
+        help="Directory to scan (initial: ./src).",
     )
     parser.add_argument(
         "--max-depth",
         type=int,
-        default=5,
-        help="Maximum allowed directory nesting depth (defaults to 5).",
+        help="Maximum allowed directory nesting depth (initial: 5).",
     )
     parser.add_argument(
         "--exclude",
         action="append",
         type=str,
-        default=[],
         help="Directory name patterns to exclude (e.g., '__pycache__').",
     )
+    parser.set_defaults(root=Path("src"), max_depth=5, exclude=[])
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
@@ -83,7 +81,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     root = args.root.resolve()
 
     if not root.exists():
-        print(f"directory_depth_guard: root path does not exist: {root}", file=sys.stderr)
+        print(
+            f"directory_depth_guard: root path does not exist: {root}", file=sys.stderr
+        )
         return 1
 
     exclusions = args.exclude + ["__pycache__", ".pytest_cache", ".mypy_cache"]

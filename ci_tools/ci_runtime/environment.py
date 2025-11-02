@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 def load_env_file(path: str) -> dict[str, str]:
+    """Parse a simple KEY=VALUE dotenv file into a dictionary."""
     env_path = Path(path).expanduser()
     if not env_path.is_file():
         return {}
@@ -24,6 +25,7 @@ def load_env_file(path: str) -> dict[str, str]:
 
 
 def load_env_settings(env_path: str) -> None:
+    """Populate os.environ with defaults from a dotenv-style file."""
     env_values = load_env_file(env_path)
     for key, value in env_values.items():
         os.environ.setdefault(key, value)

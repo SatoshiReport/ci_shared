@@ -15,6 +15,7 @@ from .process import gather_file_diff, tail_text
 
 
 def _gather_focused_diff(implicated_files: Iterable[str]) -> str:
+    """Return the per-file git diff for files implicated by the failure."""
     blocks: list[str] = []
     for rel_path in implicated_files:
         diff = gather_file_diff(rel_path)
@@ -24,6 +25,7 @@ def _gather_focused_diff(implicated_files: Iterable[str]) -> str:
 
 
 def _render_coverage_context(report: CoverageCheckResult) -> tuple[str, str, list[str]]:
+    """Derive coverage summary text and implicated file list."""
     deficits = [f"- {item.path}: {item.coverage:.1f}%" for item in report.deficits]
     intro = (
         "Coverage guard triggered: add or expand tests so each listed module "
@@ -49,6 +51,7 @@ def build_failure_context(
     result: CommandResult,
     coverage_report: Optional[CoverageCheckResult],
 ) -> FailureContext:
+    """Compile the information Codex needs to produce a follow-up patch."""
     if coverage_report is not None:
         summary, log_excerpt, implicated = _render_coverage_context(coverage_report)
         print(

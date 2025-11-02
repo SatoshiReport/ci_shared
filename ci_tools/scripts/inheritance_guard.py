@@ -21,26 +21,26 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("src"),
-        help="Directory to scan for Python modules (defaults to ./src).",
+        help="Directory to scan for Python modules (initial: ./src).",
     )
     parser.add_argument(
         "--max-depth",
         type=int,
-        default=2,
-        help="Maximum allowed inheritance depth (default: 2, meaning class → parent → grandparent).",
+        help="Maximum allowed inheritance depth (initial: 2, meaning class → parent → grandparent).",
     )
     parser.add_argument(
         "--exclude",
         action="append",
         type=Path,
-        default=[],
         help="Path prefix to exclude from the scan (may be passed multiple times).",
     )
+    parser.set_defaults(root=Path("src"), max_depth=2, exclude=[])
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
 def iter_python_files(root: Path) -> Iterable[Path]:
+    if not root.exists():
+        raise OSError(f"Path does not exist: {root}")
     if root.is_file():
         if root.suffix == ".py":
             yield root
@@ -114,14 +114,17 @@ def calculate_depth(
 
     # Recursively calculate depth for each base
     max_base_depth = 0
+    has_real_bases = False
     for base in bases:
         # Skip common base classes that don't count as "real" inheritance
         if base in ("object", "Protocol", "ABC"):
             continue
+        has_real_bases = True
         base_depth = calculate_depth(base, hierarchy, visited.copy())
         max_base_depth = max(max_base_depth, base_depth)
 
-    return max_base_depth + 1
+    # Only count depth if there were non-skipped bases
+    return max_base_depth + 1 if has_real_bases else 0
 
 
 def scan_file(

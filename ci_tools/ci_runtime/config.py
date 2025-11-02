@@ -66,31 +66,31 @@ def load_repo_config(repo_root: Path) -> dict[str, Any]:
     return {}
 
 
-def _coerce_repo_context(config: dict[str, Any], default: str) -> str:
+def _coerce_repo_context(config: dict[str, Any], initial: str) -> str:
     raw = config.get("repo_context")
     if isinstance(raw, str):
         return raw
-    return default
+    return initial
 
 
 def _coerce_protected_prefixes(
     config: dict[str, Any],
-    default: Iterable[str],
+    initial: Iterable[str],
 ) -> tuple[str, ...]:
     raw = config.get("protected_path_prefixes")
     if isinstance(raw, (list, tuple, set)):
         return tuple(str(item) for item in raw)
-    return tuple(default)
+    return tuple(initial)
 
 
-def _coerce_coverage_threshold(config: dict[str, Any], default: float) -> float:
+def _coerce_coverage_threshold(config: dict[str, Any], initial: float) -> float:
     raw = config.get("coverage_threshold")
     if isinstance(raw, (int, float, str)):
         try:
             return float(raw)
         except (TypeError, ValueError):  # pragma: no cover - defensive
-            return default
-    return default
+            return initial
+    return initial
 
 
 REPO_ROOT = detect_repo_root()

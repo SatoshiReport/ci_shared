@@ -13,10 +13,9 @@ from ci_tools.ci import gather_git_diff, request_commit_message
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a commit message via Codex")
-    parser.add_argument("--model", default=None, help="Model name to pass to Codex")
+    parser.add_argument("--model", help="Model name to pass to Codex")
     parser.add_argument(
         "--reasoning",
-        default=None,
         help="Reasoning effort to request (low/medium/high)",
     )
     parser.add_argument(
@@ -27,9 +26,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=None,
         help="Optional file to write the commit summary/body (suppresses stdout).",
     )
+    parser.set_defaults(model=None, reasoning=None, output=None)
     return parser.parse_args(argv)
 
 

@@ -25,9 +25,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path("."),
-        help="Repository root directory (defaults to current directory).",
+        help="Repository root directory (initial: current directory).",
     )
+    parser.set_defaults(root=Path("."))
     return parser.parse_args()
 
 

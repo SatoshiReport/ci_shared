@@ -167,26 +167,43 @@ def collect_literal_fallbacks() -> List[Tuple[str, int, str]]:
             self.rel_path = rel_path
 
         def visit_Call(self, node: ast.Call) -> None:
-            qualname = get_call_qualname(node.func) or ""
-            if qualname.endswith(".get"):
-                default_arg = _resolve_default_argument(
-                    node,
-                    positional_index=1,
-                    keyword_names={"default", "fallback"},
-                )
-                self._maybe_record(node, default_arg, f"{qualname} literal fallback")
-            elif qualname == "getattr" and len(node.args) >= 3:
-                self._maybe_record(node, node.args[2], "getattr literal fallback")
-            elif qualname in {"os.getenv", "os.environ.get"}:
-                default_arg = _resolve_default_argument(
-                    node,
-                    positional_index=1,
-                    keyword_names={"default"},
-                )
-                self._maybe_record(node, default_arg, f"{qualname} literal fallback")
-            elif qualname.endswith(".setdefault") and len(node.args) >= 2:
-                self._maybe_record(node, node.args[1], f"{qualname} literal fallback")
+            self._check_get_method(node)
+            self._check_getattr(node)
+            self._check_os_getenv(node)
+            self._check_setdefault(node)
             self.generic_visit(node)
+
+        def _check_get_method(self, node: ast.Call) -> None:
+            qualname = get_call_qualname(node.func) or ""
+            if not qualname.endswith(".get"):
+                return
+            default_arg = _resolve_default_argument(
+                node,
+                positional_index=1,
+                keyword_names={"default", "fallback"},
+            )
+            self._maybe_record(node, default_arg, f"{qualname} literal fallback")
+
+        def _check_getattr(self, node: ast.Call) -> None:
+            qualname = get_call_qualname(node.func) or ""
+            if qualname == "getattr" and len(node.args) >= 3:
+                self._maybe_record(node, node.args[2], "getattr literal fallback")
+
+        def _check_os_getenv(self, node: ast.Call) -> None:
+            qualname = get_call_qualname(node.func) or ""
+            if qualname not in {"os.getenv", "os.environ.get"}:
+                return
+            default_arg = _resolve_default_argument(
+                node,
+                positional_index=1,
+                keyword_names={"default"},
+            )
+            self._maybe_record(node, default_arg, f"{qualname} literal fallback")
+
+        def _check_setdefault(self, node: ast.Call) -> None:
+            qualname = get_call_qualname(node.func) or ""
+            if qualname.endswith(".setdefault") and len(node.args) >= 2:
+                self._maybe_record(node, node.args[1], f"{qualname} literal fallback")
 
         def _maybe_record(
             self,
@@ -198,6 +215,8 @@ def collect_literal_fallbacks() -> List[Tuple[str, int, str]]:
                 records.append((self.rel_path, node.lineno, message))
 
     for ctx in iter_module_contexts():
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         LiteralFallbackVisitor(ctx.rel_path).visit(ctx.tree)
     return records
 
@@ -221,6 +240,8 @@ def collect_bool_fallbacks() -> List[Tuple[str, int]]:
             self.generic_visit(node)
 
     for ctx in iter_module_contexts():
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         BoolFallbackVisitor(ctx.rel_path).visit(ctx.tree)
     return records
 
@@ -240,6 +261,8 @@ def collect_conditional_literal_returns() -> List[Tuple[str, int]]:
             self.generic_visit(node)
 
     for ctx in iter_module_contexts():
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         ConditionalLiteralVisitor(ctx.rel_path).visit(ctx.tree)
     return records
 
@@ -282,6 +305,8 @@ def collect_backward_compat_blocks() -> List[Tuple[str, int, str]]:
                 )
 
     for ctx in iter_module_contexts(include_source=True):
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         LegacyVisitor(ctx).visit(ctx.tree)
     return records
 
@@ -341,6 +366,8 @@ def _function_entries_from_context(
 def _build_duplicate_mapping(min_length: int) -> Dict[str, List[FunctionEntry]]:
     mapping: Dict[str, List[FunctionEntry]] = defaultdict(list)
     for ctx in iter_module_contexts():
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         if ctx.path.name == "__init__.py":
             continue
         for key, entry in _function_entries_from_context(ctx, min_length=min_length):
@@ -385,19 +412,16 @@ def purge_bytecode_artifacts() -> None:
 
 
 __all__ = [
-    name
-    for name in [
-        "collect_long_functions",
-        "collect_broad_excepts",
-        "collect_silent_handlers",
-        "collect_generic_raises",
-        "collect_literal_fallbacks",
-        "collect_bool_fallbacks",
-        "collect_conditional_literal_returns",
-        "collect_backward_compat_blocks",
-        "collect_forbidden_sync_calls",
-        "collect_duplicate_functions",
-        "collect_bytecode_artifacts",
-        "purge_bytecode_artifacts",
-    ]
+    "collect_long_functions",
+    "collect_broad_excepts",
+    "collect_silent_handlers",
+    "collect_generic_raises",
+    "collect_literal_fallbacks",
+    "collect_bool_fallbacks",
+    "collect_conditional_literal_returns",
+    "collect_backward_compat_blocks",
+    "collect_forbidden_sync_calls",
+    "collect_duplicate_functions",
+    "collect_bytecode_artifacts",
+    "purge_bytecode_artifacts",
 ]

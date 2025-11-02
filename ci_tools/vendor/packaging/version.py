@@ -6,6 +6,7 @@ import re
 from functools import total_ordering
 from typing import Tuple
 
+from ..._messages import format_default_message
 
 _VERSION_PATTERN = re.compile(r"^\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?")
 
@@ -16,11 +17,13 @@ class InvalidVersion(ValueError):
     default_message = "Invalid version string"
 
     def __init__(self, *, detail: str | None = None) -> None:
-        message = self.default_message if detail is None else f"{self.default_message}: {detail}"
+        """Initialise the exception with optional extra detail."""
+        message = format_default_message(self.default_message, detail)
         super().__init__(message)
 
     @classmethod
     def for_value(cls, version: str) -> "InvalidVersion":
+        """Return an error describing the invalid version string."""
         return cls(detail=f"unable to parse {version!r}")
 
 
@@ -48,17 +51,21 @@ class Version:
 
     @property
     def release(self) -> Tuple[int, ...]:
+        """Return the release tuple (major, minor, patch)."""
         return self._release
 
     @property
     def major(self) -> int:
+        """Return the major version number."""
         return self._release[0]
 
     @property
     def minor(self) -> int:
+        """Return the minor version number."""
         return self._release[1] if len(self._release) > 1 else 0
 
     def _normalized_release(self) -> Tuple[int, int, int]:
+        """Return a three-component tuple padded with zeros."""
         first = self._release[0] if len(self._release) > 0 else 0
         second = self._release[1] if len(self._release) > 1 else 0
         third = self._release[2] if len(self._release) > 2 else 0

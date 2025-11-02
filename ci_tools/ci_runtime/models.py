@@ -6,6 +6,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Iterable, Optional
 
+from .._messages import format_default_message
+
 
 class CiError(RuntimeError):
     """Base class for CI automation runtime failures."""
@@ -13,12 +15,9 @@ class CiError(RuntimeError):
     default_message = "CI automation failure"
 
     def __init__(self, *, detail: Optional[str] = None) -> None:
+        """Initialise the exception with an optional detail string."""
         self.detail = detail
-        message = (
-            self.default_message
-            if detail is None
-            else f"{self.default_message}: {detail}"
-        )
+        message = format_default_message(self.default_message, detail)
         super().__init__(message)
 
 
@@ -29,6 +28,7 @@ class CodexCliError(CiError):
 
     @classmethod
     def exit_status(cls, *, returncode: int, output: Optional[str]) -> "CodexCliError":
+        """Build an error containing the CLI exit status and captured output."""
         normalized = (output or "").strip() or "(no output)"
         detail = f"exit status {returncode} ({normalized})"
         return cls(detail=detail)
@@ -41,6 +41,7 @@ class CommitMessageError(CiError):
 
     @classmethod
     def empty_response(cls) -> "CommitMessageError":
+        """Return an error signalling the Codex response was blank."""
         return cls()
 
 
@@ -50,13 +51,10 @@ class CiAbort(SystemExit):
     default_message = "CI automation aborted"
 
     def __init__(self, *, detail: Optional[str] = None, code: int = 1) -> None:
+        """Initialise the abort with a user-facing detail string."""
         self.detail = detail
         self.exit_code = code
-        message = (
-            self.default_message
-            if detail is None
-            else f"{self.default_message}: {detail}"
-        )
+        message = format_default_message(self.default_message, detail)
         super().__init__(message)
         self.code = code
 
@@ -68,6 +66,7 @@ class GitCommandAbort(CiAbort):
 
     @classmethod
     def commit_failed(cls, exc: subprocess.CalledProcessError) -> "GitCommandAbort":
+        """Return an error capturing a failed git commit invocation."""
         output = (exc.stderr or exc.output or "").strip()
         detail = f"'git commit' exited with status {exc.returncode}"
         if output:
@@ -76,6 +75,7 @@ class GitCommandAbort(CiAbort):
 
     @classmethod
     def push_failed(cls, exc: subprocess.CalledProcessError) -> "GitCommandAbort":
+        """Return an error capturing a failed git push invocation."""
         output = (exc.stderr or exc.output or "").strip()
         detail = f"'git push' exited with status {exc.returncode}"
         if output:
@@ -90,6 +90,7 @@ class RepositoryStateAbort(CiAbort):
 
     @classmethod
     def detached_head(cls) -> "RepositoryStateAbort":
+        """Factory raised when running outside a branch (detached HEAD)."""
         return cls(
             detail="detached HEAD detected; checkout a branch before running ci.py"
         )
@@ -104,6 +105,7 @@ class ModelSelectionAbort(CiAbort):
     def unsupported_model(
         cls, *, received: str, required: str
     ) -> "ModelSelectionAbort":
+        """Factory when a CLI caller passes an unsupported model."""
         return cls(detail=f"requires `{required}` but received `{received}`")
 
 
@@ -116,6 +118,7 @@ class ReasoningEffortAbort(CiAbort):
     def unsupported_choice(
         cls, *, received: str, allowed: Iterable[str]
     ) -> "ReasoningEffortAbort":
+        """Factory when the reasoning effort flag is not recognised."""
         choices = ", ".join(allowed)
         return cls(detail=f"expected one of {choices}; received `{received}`")
 
@@ -127,18 +130,22 @@ class PatchLifecycleAbort(CiAbort):
 
     @classmethod
     def attempts_exhausted(cls) -> "PatchLifecycleAbort":
+        """Factory when Codex could not produce a valid patch in time."""
         return cls(detail="unable to obtain a valid patch after multiple attempts")
 
     @classmethod
     def missing_patch(cls) -> "PatchLifecycleAbort":
+        """Factory when Codex responded without a usable patch diff."""
         return cls(detail="Codex returned an empty or NOOP patch response")
 
     @classmethod
     def user_declined(cls) -> "PatchLifecycleAbort":
+        """Factory when the user stops automation during a patch cycle."""
         return cls(detail="user declined CI automation")
 
     @classmethod
     def retries_exhausted(cls) -> "PatchLifecycleAbort":
+        """Factory when patch retries were exhausted after repeated failures."""
         return cls(
             detail="Codex patches failed after exhausting retries; manual review required"
         )
@@ -146,21 +153,27 @@ class PatchLifecycleAbort(CiAbort):
 
 @dataclass
 class CommandResult:
+    """Captured output from a completed subprocess invocation."""
+
     returncode: int
     stdout: str
     stderr: str
 
     @property
     def ok(self) -> bool:
+        """Return True when the process exited successfully."""
         return self.returncode == 0
 
     @property
     def combined_output(self) -> str:
+        """Return stdout and stderr concatenated together."""
         return f"{self.stdout}{self.stderr}"
 
 
 @dataclass
 class RuntimeOptions:  # pylint: disable=too-many-instance-attributes
+    """Configuration flags governing how the CI workflow runs."""
+
     command_tokens: list[str]
     command_env: dict[str, str]
     patch_approval_mode: str
@@ -174,6 +187,8 @@ class RuntimeOptions:  # pylint: disable=too-many-instance-attributes
 
 @dataclass
 class FailureContext:
+    """Summary of the most recent CI failure provided to Codex."""
+
     log_excerpt: str
     summary: str
     implicated_files: list[str]
@@ -183,16 +198,20 @@ class FailureContext:
 
 @dataclass
 class PatchAttemptState:
+    """Track Codex patch attempts and retry budget."""
+
     max_attempts: int
     patch_attempt: int = 1
     extra_retry_budget: int = 3
     last_error: Optional[str] = None
 
     def ensure_budget(self) -> None:
+        """Abort when the patch attempt counter exceeds the allowed budget."""
         if self.patch_attempt > self.max_attempts:
             raise PatchLifecycleAbort.attempts_exhausted()
 
     def record_failure(self, message: str, *, retryable: bool) -> None:
+        """Record a patch failure and expand the budget when retries remain."""
         self.last_error = message
         if self.patch_attempt >= self.max_attempts:
             if retryable and self.extra_retry_budget > 0:
@@ -214,6 +233,7 @@ class PatchApplyError(CiError):
 
     @classmethod
     def git_apply_failed(cls, *, output: str) -> "PatchApplyError":
+        """Factory when `git apply` fails to dry-run or apply the diff."""
         normalized = (output or "").strip() or "(no output)"
         detail = f"`git apply` failed: {normalized}"
         return cls(detail=detail, retryable=True)
@@ -222,6 +242,7 @@ class PatchApplyError(CiError):
     def preflight_failed(
         cls, *, check_output: str, dry_output: str
     ) -> "PatchApplyError":
+        """Factory when both git and patch dry-runs are unable to apply."""
         detail = (
             "Patch dry-run failed.\n"
             f"git apply --check output:\n{(check_output or '').strip() or '(none)'}\n\n"
@@ -231,6 +252,7 @@ class PatchApplyError(CiError):
 
     @classmethod
     def patch_exit(cls, *, returncode: int, output: str) -> "PatchApplyError":
+        """Factory when the POSIX `patch` utility exits with a non-zero code."""
         normalized = (output or "").strip() or "(no output)"
         detail = f"`patch` exited with status {returncode}: {normalized}"
         return cls(detail=detail, retryable=True)
@@ -238,15 +260,32 @@ class PatchApplyError(CiError):
 
 @dataclass
 class CoverageDeficit:
+    """Coverage percentage for a single module below the configured threshold."""
+
     path: str
     coverage: float
 
 
 @dataclass
 class CoverageCheckResult:
+    """Aggregate report returned by the coverage guard."""
+
     table_text: str
     deficits: list[CoverageDeficit]
     threshold: float
+
+
+@dataclass
+class PatchPrompt:
+    """Contextual information sent to Codex when requesting a patch."""
+
+    command: str
+    failure_context: FailureContext
+    git_diff: str
+    git_status: str
+    iteration: int
+    patch_error: Optional[str]
+    attempt: int
 
 
 __all__ = [
@@ -266,4 +305,5 @@ __all__ = [
     "PatchAttemptState",
     "CoverageDeficit",
     "CoverageCheckResult",
+    "PatchPrompt",
 ]

@@ -1,0 +1,542 @@
+from __future__ import annotations
+
+import textwrap
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from ci_tools.scripts import inheritance_guard
+
+
+def write_module(path: Path, content: str) -> None:
+    """Helper to write Python module content."""
+    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+
+
+def test_parse_args_defaults():
+    """Test argument parsing with defaults."""
+    args = inheritance_guard.parse_args([])
+    assert args.root == Path("src")
+    assert args.max_depth == 2
+    assert args.exclude == []
+
+
+def test_parse_args_custom_values():
+    """Test argument parsing with custom values."""
+    args = inheritance_guard.parse_args(
+        ["--root", "custom", "--max-depth", "3", "--exclude", "tests"]
+    )
+    assert args.root == Path("custom")
+    assert args.max_depth == 3
+    assert args.exclude == [Path("tests")]
+
+
+def test_iter_python_files_single_file(tmp_path: Path):
+    """Test iter_python_files with a single file."""
+    py_file = tmp_path / "test.py"
+    py_file.write_text("# test")
+
+    files = list(inheritance_guard.iter_python_files(py_file))
+    assert len(files) == 1
+    assert files[0] == py_file
+
+
+def test_iter_python_files_non_python_file(tmp_path: Path):
+    """Test iter_python_files with a non-Python file."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("# test")
+
+    files = list(inheritance_guard.iter_python_files(txt_file))
+    assert len(files) == 0
+
+
+def test_is_excluded_basic():
+    """Test basic exclusion logic."""
+    path = Path("/project/src/module.py").resolve()
+    exclusions = [Path("/project/src").resolve()]
+    assert inheritance_guard.is_excluded(path, exclusions) is True
+
+
+def test_is_excluded_no_match():
+    """Test exclusion with no match."""
+    path = Path("/project/src/module.py").resolve()
+    exclusions = [Path("/project/tests").resolve()]
+    assert inheritance_guard.is_excluded(path, exclusions) is False
+
+
+def test_extract_base_names_simple():
+    """Test extracting base names from simple inheritance."""
+    source = "class Child(Parent): pass"
+    tree = inheritance_guard.ast.parse(source)
+    class_node = tree.body[0]
+
+    base_names = inheritance_guard.extract_base_names(class_node)
+    assert base_names == ["Parent"]
+
+
+def test_extract_base_names_multiple():
+    """Test extracting multiple base names."""
+    source = "class Child(Parent1, Parent2): pass"
+    tree = inheritance_guard.ast.parse(source)
+    class_node = tree.body[0]
+
+    base_names = inheritance_guard.extract_base_names(class_node)
+    assert base_names == ["Parent1", "Parent2"]
+
+
+def test_extract_base_names_attribute():
+    """Test extracting base names with module attributes."""
+    source = "class Child(module.Parent): pass"
+    tree = inheritance_guard.ast.parse(source)
+    class_node = tree.body[0]
+
+    base_names = inheritance_guard.extract_base_names(class_node)
+    assert base_names == ["module.Parent"]
+
+
+def test_extract_base_names_nested_attribute():
+    """Test extracting base names with nested module attributes."""
+    source = "class Child(package.module.Parent): pass"
+    tree = inheritance_guard.ast.parse(source)
+    class_node = tree.body[0]
+
+    base_names = inheritance_guard.extract_base_names(class_node)
+    assert base_names == ["package.module.Parent"]
+
+
+def test_extract_base_names_no_bases():
+    """Test extracting base names with no bases."""
+    source = "class Child: pass"
+    tree = inheritance_guard.ast.parse(source)
+    class_node = tree.body[0]
+
+    base_names = inheritance_guard.extract_base_names(class_node)
+    assert base_names == []
+
+
+def test_build_class_hierarchy_basic():
+    """Test building class hierarchy."""
+    source = textwrap.dedent(
+        """
+        class Parent:
+            pass
+
+        class Child(Parent):
+            pass
+        """
+    ).strip()
+
+    tree = inheritance_guard.ast.parse(source)
+    hierarchy = inheritance_guard.build_class_hierarchy(tree)
+
+    assert "Parent" in hierarchy
+    assert "Child" in hierarchy
+    assert hierarchy["Parent"] == []
+    assert hierarchy["Child"] == ["Parent"]
+
+
+def test_build_class_hierarchy_multiple_classes():
+    """Test building hierarchy with multiple classes."""
+    source = textwrap.dedent(
+        """
+        class A:
+            pass
+
+        class B(A):
+            pass
+
+        class C(B):
+            pass
+        """
+    ).strip()
+
+    tree = inheritance_guard.ast.parse(source)
+    hierarchy = inheritance_guard.build_class_hierarchy(tree)
+
+    assert hierarchy["A"] == []
+    assert hierarchy["B"] == ["A"]
+    assert hierarchy["C"] == ["B"]
+
+
+def test_calculate_depth_no_inheritance():
+    """Test calculating depth with no inheritance."""
+    hierarchy = {"Child": []}
+    depth = inheritance_guard.calculate_depth("Child", hierarchy)
+    assert depth == 0
+
+
+def test_calculate_depth_single_level():
+    """Test calculating depth with single level inheritance."""
+    hierarchy = {"Parent": [], "Child": ["Parent"]}
+    depth = inheritance_guard.calculate_depth("Child", hierarchy)
+    assert depth == 1
+
+
+def test_calculate_depth_multiple_levels():
+    """Test calculating depth with multiple levels."""
+    hierarchy = {"GrandParent": [], "Parent": ["GrandParent"], "Child": ["Parent"]}
+    depth = inheritance_guard.calculate_depth("Child", hierarchy)
+    assert depth == 2
+
+
+def test_calculate_depth_unknown_class():
+    """Test calculating depth for unknown class."""
+    hierarchy = {"Known": []}
+    depth = inheritance_guard.calculate_depth("Unknown", hierarchy)
+    assert depth == 0
+
+
+def test_calculate_depth_external_base():
+    """Test calculating depth with external base class."""
+    hierarchy = {"Child": ["ExternalBase"]}
+    depth = inheritance_guard.calculate_depth("Child", hierarchy)
+    assert depth == 1
+
+
+def test_calculate_depth_ignores_object():
+    """Test calculating depth ignores object base class."""
+    hierarchy = {"Child": ["object"]}
+    depth = inheritance_guard.calculate_depth("Child", hierarchy)
+    assert depth == 0
+
+
+def test_calculate_depth_ignores_protocol():
+    """Test calculating depth ignores Protocol base class."""
+    hierarchy = {"Child": ["Protocol"]}
+    depth = inheritance_guard.calculate_depth("Child", hierarchy)
+    assert depth == 0
+
+
+def test_calculate_depth_ignores_abc():
+    """Test calculating depth ignores ABC base class."""
+    hierarchy = {"Child": ["ABC"]}
+    depth = inheritance_guard.calculate_depth("Child", hierarchy)
+    assert depth == 0
+
+
+def test_calculate_depth_cycle_detection():
+    """Test calculating depth handles cycles."""
+    hierarchy = {"A": ["B"], "B": ["A"]}
+    depth = inheritance_guard.calculate_depth("A", hierarchy)
+    assert depth >= 0  # Should not crash
+
+
+def test_calculate_depth_multiple_bases():
+    """Test calculating depth with multiple bases."""
+    hierarchy = {"Base1": [], "Base2": ["Base1"], "Child": ["Base2", "Base1"]}
+    depth = inheritance_guard.calculate_depth("Child", hierarchy)
+    assert depth == 2  # Max depth from Base2
+
+
+def test_scan_file_within_limit(tmp_path: Path):
+    """Test scanning a file within the depth limit."""
+    py_file = tmp_path / "simple.py"
+    write_module(
+        py_file,
+        """
+        class Parent:
+            pass
+
+        class Child(Parent):
+            pass
+        """,
+    )
+
+    violations = inheritance_guard.scan_file(py_file, max_depth=2)
+    assert len(violations) == 0
+
+
+def test_scan_file_exceeds_limit(tmp_path: Path):
+    """Test scanning a file that exceeds the depth limit."""
+    py_file = tmp_path / "deep.py"
+    write_module(
+        py_file,
+        """
+        class GrandParent:
+            pass
+
+        class Parent(GrandParent):
+            pass
+
+        class Child(Parent):
+            pass
+
+        class DeepChild(Child):
+            pass
+        """,
+    )
+
+    violations = inheritance_guard.scan_file(py_file, max_depth=2)
+    assert len(violations) >= 1
+    assert any(v[1] == "DeepChild" for v in violations)
+
+
+def test_scan_file_syntax_error(tmp_path: Path):
+    """Test scan_file with syntax error."""
+    py_file = tmp_path / "bad.py"
+    py_file.write_text("class Foo:\n    def method(self\n")
+
+    with pytest.raises(RuntimeError, match="failed to parse Python source"):
+        inheritance_guard.scan_file(py_file, max_depth=2)
+
+
+def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test main function with no violations."""
+    root = tmp_path / "src"
+    root.mkdir()
+    write_module(
+        root / "simple.py",
+        """
+        class Parent:
+            pass
+
+        class Child(Parent):
+            pass
+        """,
+    )
+
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        result = inheritance_guard.main(["--root", str(root), "--max-depth", "2"])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+
+
+def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test main function detects violations."""
+    root = tmp_path / "src"
+    root.mkdir()
+    write_module(
+        root / "deep.py",
+        """
+        class A:
+            pass
+
+        class B(A):
+            pass
+
+        class C(B):
+            pass
+
+        class D(C):
+            pass
+        """,
+    )
+
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        result = inheritance_guard.main(["--root", str(root), "--max-depth", "2"])
+
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "Deep inheritance detected" in captured.err
+    assert "composition over inheritance" in captured.err
+
+
+def test_main_respects_exclusions(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test main function respects exclusion patterns."""
+    root = tmp_path / "src"
+    excluded = root / "excluded"
+    root.mkdir()
+    excluded.mkdir(parents=True)
+
+    deep_hierarchy = """
+        class A:
+            pass
+        class B(A):
+            pass
+        class C(B):
+            pass
+        class D(C):
+            pass
+    """
+    write_module(root / "included.py", deep_hierarchy)
+    write_module(excluded / "excluded.py", deep_hierarchy)
+
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        result = inheritance_guard.main(
+            ["--root", str(root), "--max-depth", "1", "--exclude", str(excluded)]
+        )
+
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "included.py" in captured.err
+    assert "excluded.py" not in captured.err
+
+
+def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test main function prints violations in sorted order."""
+    root = tmp_path / "src"
+    root.mkdir()
+
+    deep_hierarchy = """
+        class A:
+            pass
+        class B(A):
+            pass
+        class C(B):
+            pass
+    """
+    write_module(root / "zebra.py", deep_hierarchy)
+    write_module(root / "alpha.py", deep_hierarchy)
+
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        result = inheritance_guard.main(["--root", str(root), "--max-depth", "1"])
+
+    assert result == 1
+    captured = capsys.readouterr()
+    err_lines = [
+        line for line in captured.err.split("\n") if "alpha.py" in line or "zebra.py" in line
+    ]
+    assert len(err_lines) >= 2
+
+
+def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test main function handles scan_file errors."""
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "bad.py").write_text("class Foo:\n    def method(self\n")
+
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        result = inheritance_guard.main(["--root", str(root)])
+
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "failed to parse" in captured.err
+
+
+def test_format_inheritance_violation():
+    """Test formatting inheritance violation messages."""
+    violation = inheritance_guard._format_inheritance_violation(
+        Path("/project/src/module.py"),
+        class_name="DeepClass",
+        lineno=10,
+        depth=3,
+        base_names=["Parent1", "Parent2"],
+        limit=2,
+        repo_root=Path("/project"),
+    )
+
+    assert "module.py:10" in violation or "module.py" in violation
+    assert "DeepClass" in violation
+    assert "depth 3" in violation
+    assert "limit 2" in violation
+    assert "Parent1, Parent2" in violation
+
+
+def test_collect_inheritance_violations(tmp_path: Path):
+    """Test collecting inheritance violations."""
+    py_file = tmp_path / "test.py"
+    write_module(
+        py_file,
+        """
+        class A:
+            pass
+        class B(A):
+            pass
+        class C(B):
+            pass
+        """,
+    )
+
+    violations = inheritance_guard._collect_inheritance_violations(
+        py_file, max_depth=1, repo_root=tmp_path
+    )
+
+    assert len(violations) >= 1
+    assert any("C" in v for v in violations)
+
+
+def test_print_inheritance_report(capsys: pytest.CaptureFixture):
+    """Test printing inheritance report."""
+    violations = ["violation1", "violation2"]
+    inheritance_guard._print_inheritance_report(violations, limit=2)
+
+    captured = capsys.readouterr()
+    assert "Deep inheritance detected" in captured.err
+    assert "depth 2" in captured.err
+    assert "composition over inheritance" in captured.err
+    assert "violation1" in captured.err
+    assert "violation2" in captured.err
+
+
+def test_main_traverse_error(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test main function handles traversal errors."""
+    missing = tmp_path / "missing"
+
+    result = inheritance_guard.main(["--root", str(missing)])
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "failed to traverse" in captured.err
+
+
+def test_scan_file_no_classes(tmp_path: Path):
+    """Test scanning a file with no classes."""
+    py_file = tmp_path / "no_classes.py"
+    write_module(
+        py_file,
+        """
+        def function():
+            pass
+        """,
+    )
+
+    violations = inheritance_guard.scan_file(py_file, max_depth=2)
+    assert len(violations) == 0
+
+
+def test_calculate_depth_diamond_inheritance():
+    """Test calculating depth with diamond inheritance pattern."""
+    hierarchy = {
+        "Base": [],
+        "Left": ["Base"],
+        "Right": ["Base"],
+        "Diamond": ["Left", "Right"],
+    }
+    depth = inheritance_guard.calculate_depth("Diamond", hierarchy)
+    assert depth == 2
+
+
+def test_extract_base_names_complex_expression():
+    """Test extract_base_names handles non-Name and non-Attribute bases."""
+    source = "class Child(Parent if condition else Other): pass"
+    tree = inheritance_guard.ast.parse(source)
+    class_node = tree.body[0]
+
+    base_names = inheritance_guard.extract_base_names(class_node)
+    # Should handle gracefully, possibly returning empty or partial
+    assert isinstance(base_names, list)
+
+
+def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test main function handles relative paths correctly."""
+    root = tmp_path / "src"
+    root.mkdir()
+
+    write_module(
+        root / "module.py",
+        """
+        class A:
+            pass
+        class B(A):
+            pass
+        class C(B):
+            pass
+        """,
+    )
+
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        result = inheritance_guard.main(["--root", str(root), "--max-depth", "1"])
+
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "module.py" in captured.err
+
+
+def test_calculate_depth_visited_passed():
+    """Test calculate_depth with pre-populated visited set."""
+    hierarchy = {"A": [], "B": ["A"]}
+    visited = {"A"}
+    depth = inheritance_guard.calculate_depth("B", hierarchy, visited)
+    assert depth >= 0

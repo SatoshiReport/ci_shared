@@ -20,22 +20,27 @@ def request_commit_message(
     extra_context: str,
     detailed: bool = False,
 ) -> tuple[str, List[str]]:
+    """Ask Codex to produce a commit message for the staged diff."""
     effort_display = reasoning_effort or "default"
     if detailed:
         instructions = textwrap.dedent(
             """\
             Produce a git commit message consisting of:
             - A concise subject line (≤72 characters) that summarizes what changed using past tense.
-            - After a blank line, a short bullet list (five bullets or fewer, each starting with "- ") that highlights key changes using past tense.
+            - After a blank line, include ≤5 bullet points (each starting with "- ").
+            - Each bullet should summarise the key changes using past tense verbs.
             Avoid trailing periods on the subject line.
-            Rely on the diff provided below for context and do not run shell commands such as `diff --git`.
+            Rely on the diff provided below for context instead of running shell commands.
+            Avoid invoking tools such as `diff --git`.
             """
         )
     else:
-        instructions = (
-            "Provide a single-line commit message in past tense (no trailing punctuation). "
-            "Use the diff shown above for context instead of executing shell commands like `diff --git`."
-        )
+        instructions = textwrap.dedent(
+            """\
+            Provide a single-line commit message in past tense (no trailing punctuation).
+            Use the diff shown above instead of running shell commands such as `diff --git`.
+            """
+        ).strip()
     extra_block = extra_context.strip()
     prompt = textwrap.dedent(
         f"""\
@@ -76,6 +81,7 @@ def commit_and_push(
     *,
     push: bool,
 ) -> None:
+    """Create a commit locally and optionally push it to the configured remote."""
     print("[info] Creating commit...")
     commit_args = ["git", "commit", "-m", summary]
     body_text = "\n".join(body_lines).strip()
@@ -89,7 +95,7 @@ def commit_and_push(
     if not push:
         return
 
-    remote = os.environ.get("GIT_REMOTE", "origin")
+    remote = os.environ.get("GIT_REMOTE") or "origin"
     branch_result = run_command(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"], check=True
     )

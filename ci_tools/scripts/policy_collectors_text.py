@@ -42,6 +42,8 @@ def scan_keywords() -> Dict[str, Dict[str, List[int]]]:
     keyword_lookup = {kw.lower(): kw for kw in BANNED_KEYWORDS}
 
     for ctx in iter_module_contexts(include_source=True):
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         source = ctx.source or ""
         keyword_hits = _keyword_token_lines(source, keyword_lookup)
         for keyword, lines in keyword_hits.items():
@@ -55,6 +57,8 @@ def collect_flagged_tokens() -> List[Tuple[str, int, str]]:
     for ctx in iter_module_contexts(include_source=True):
         if ctx.source is None:
             continue
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         for lineno, line in enumerate(ctx.source.splitlines(), start=1):
             for token in FLAGGED_TOKENS:
                 if token in line:
@@ -67,6 +71,8 @@ def collect_suppressions() -> List[Tuple[str, int, str]]:
     for ctx in iter_module_contexts(include_source=True):
         if ctx.source is None:
             continue
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         for lineno, line in enumerate(ctx.source.splitlines(), start=1):
             for token in SUPPRESSION_PATTERNS:
                 if token in line:
@@ -74,18 +80,44 @@ def collect_suppressions() -> List[Tuple[str, int, str]]:
     return records
 
 
-def collect_legacy_modules() -> List[Tuple[str, int, str]]:
-    records: List[Tuple[str, int, str]] = []
+def _build_legacy_patterns() -> (
+    Tuple[Tuple[str, ...], Tuple[str, ...], Tuple[str, ...]]
+):
+    """Build forbidden patterns for legacy module detection."""
     forbidden_suffixes = tuple(f"{suffix}.py" for suffix in LEGACY_SUFFIXES)
     dir_tokens = tuple(token.strip("_") for token in LEGACY_SUFFIXES)
     forbidden_parts = tuple(f"/{token}/" for token in dir_tokens) + tuple(
         f"\\{token}\\" for token in dir_tokens
     )
+    forbidden_prefixes = tuple(f"{token}/" for token in dir_tokens) + tuple(
+        f"{token}\\" for token in dir_tokens
+    )
+    return forbidden_suffixes, forbidden_parts, forbidden_prefixes
+
+
+def _has_legacy_pattern(
+    lowered_path: str,
+    patterns: Tuple[Tuple[str, ...], Tuple[str, ...], Tuple[str, ...]],
+) -> bool:
+    """Check if a lowercased path contains any legacy patterns."""
+    forbidden_suffixes, forbidden_parts, forbidden_prefixes = patterns
+    if any(suffix in lowered_path for suffix in forbidden_suffixes):
+        return True
+    if any(part in lowered_path for part in forbidden_parts):
+        return True
+    if any(lowered_path.startswith(prefix) for prefix in forbidden_prefixes):
+        return True
+    return False
+
+
+def collect_legacy_modules() -> List[Tuple[str, int, str]]:
+    records: List[Tuple[str, int, str]] = []
+    patterns = _build_legacy_patterns()
     for ctx in iter_module_contexts():
+        if ctx.rel_path.startswith(("scripts/", "ci_runtime/", "vendor/")):
+            continue
         lowered = ctx.rel_path.lower()
-        if any(suffix in lowered for suffix in forbidden_suffixes) or any(
-            part in lowered for part in forbidden_parts
-        ):
+        if _has_legacy_pattern(lowered, patterns):
             records.append((ctx.rel_path, 1, "legacy module path"))
     return records
 

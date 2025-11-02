@@ -5,19 +5,20 @@ from __future__ import annotations
 
 import sys
 
-from . import policy_checks as _policy_checks
-from .policy_checks import *  # noqa: F401,F403
+from .policy_checks import PolicyViolation
+from .policy_checks import main as _run_policy_checks
+from .policy_checks import purge_bytecode_artifacts
 
-__all__ = getattr(_policy_checks, "__all__", [])
+__all__ = ["PolicyViolation", "purge_bytecode_artifacts", "main"]
 
 
 def main() -> int:  # pragma: no cover - thin wrapper
-    return _policy_checks.main()
+    return _run_policy_checks()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     try:
         sys.exit(main())
-    except _policy_checks.PolicyViolation as err:
+    except PolicyViolation as err:
         print(err, file=sys.stderr)
         sys.exit(1)

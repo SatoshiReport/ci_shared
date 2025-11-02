@@ -26,10 +26,11 @@ from .models import (
     RuntimeOptions,
 )
 from .patch_cycle import request_and_apply_patches
-from .process import gather_git_diff, gather_git_status, run_command
+from .process import gather_git_diff, run_command
 
 
 def _resolve_model_choice(model_arg: Optional[str]) -> str:
+    """Validate the requested Codex model against the one we support."""
     candidate = model_arg or os.environ.get("OPENAI_MODEL") or REQUIRED_MODEL
     if candidate != REQUIRED_MODEL:
         raise ModelSelectionAbort.unsupported_model(
@@ -40,6 +41,7 @@ def _resolve_model_choice(model_arg: Optional[str]) -> str:
 
 
 def _resolve_reasoning_choice(reasoning_arg: Optional[str]) -> str:
+    """Determine the reasoning effort flag to send to Codex."""
     env_reasoning = os.environ.get("OPENAI_REASONING_EFFORT")
     candidate = (
         reasoning_arg
@@ -57,6 +59,7 @@ def _resolve_reasoning_choice(reasoning_arg: Optional[str]) -> str:
 def _derive_runtime_flags(
     args: argparse.Namespace, command_tokens: list[str]
 ) -> tuple[bool, dict[str, str], bool, bool, bool]:
+    """Derive automation flags based on CLI args and the requested command."""
     command_basename = Path(command_tokens[0]).name if command_tokens else ""
     automation_mode = command_basename == "ci.sh"
     command_env = {"CI_AUTOMATION": "1"} if automation_mode else {}
@@ -73,6 +76,7 @@ def _derive_runtime_flags(
 
 
 def configure_runtime(args: argparse.Namespace) -> RuntimeOptions:
+    """Convert parsed CLI arguments into the runtime options dataclass."""
     load_env_settings(args.env_file)
     command_tokens = shlex.split(args.command)
     model_name = _resolve_model_choice(args.model)
@@ -99,6 +103,7 @@ def configure_runtime(args: argparse.Namespace) -> RuntimeOptions:
 
 
 def perform_dry_run(args: argparse.Namespace, options: RuntimeOptions) -> Optional[int]:
+    """Run the CI command once when --dry-run is supplied."""
     if not args.dry_run:
         return None
     print("[info] Dry run: executing CI command once without invoking Codex.")
@@ -107,14 +112,17 @@ def perform_dry_run(args: argparse.Namespace, options: RuntimeOptions) -> Option
 
 
 def _collect_worktree_diffs() -> tuple[str, str]:
+    """Return both unstaged and staged git diffs."""
     return gather_git_diff(staged=False), gather_git_diff(staged=True)
 
 
 def _worktree_is_clean(unstaged_diff: str, staged_diff: str) -> bool:
+    """Return True when there are no staged or unstaged changes."""
     return not unstaged_diff and not staged_diff
 
 
 def _stage_if_needed(options: RuntimeOptions, staged_diff: str) -> str:
+    """Stage all changes when auto-stage is enabled and return the staged diff."""
     if not options.auto_stage_enabled:
         return staged_diff
     print("[info] Staging all changes (`git add -A`).")
@@ -123,6 +131,7 @@ def _stage_if_needed(options: RuntimeOptions, staged_diff: str) -> str:
 
 
 def _warn_missing_staged_changes() -> None:
+    """Warn when a commit message was requested without staged changes."""
     print(
         "[warn] No staged changes detected. Stage files before requesting a commit message.",
         file=sys.stderr,
@@ -134,6 +143,7 @@ def _maybe_request_commit_message(
     staged_diff: str,
     extra_context: str,
 ) -> tuple[Optional[str], list[str]]:
+    """Request a commit message from Codex when the mode is enabled."""
     if not options.commit_message_enabled:
         return None, []
     summary, body_lines = request_commit_message(
@@ -158,6 +168,7 @@ def _maybe_push_or_notify(
     summary: Optional[str],
     body_lines: list[str],
 ) -> None:
+    """Push automatically or prompt the user to commit manually."""
     if options.auto_push_enabled:
         commit_summary = summary or "Automated commit"
         commit_body = body_lines if summary is not None else []
@@ -168,6 +179,7 @@ def _maybe_push_or_notify(
 
 
 def finalize_worktree(args: argparse.Namespace, options: RuntimeOptions) -> int:
+    """Stage, commit, and optionally push once CI passes."""
     unstaged_diff, staged_diff = _collect_worktree_diffs()
     if _worktree_is_clean(unstaged_diff, staged_diff):
         print("[info] Working tree clean. Nothing to stage or commit.")
@@ -186,6 +198,7 @@ def finalize_worktree(args: argparse.Namespace, options: RuntimeOptions) -> int:
 
 
 def run_repair_iterations(args: argparse.Namespace, options: RuntimeOptions) -> None:
+    """Loop CI execution and Codex interactions until the command succeeds."""
     seen_patches: Set[str] = set()
     for iteration in range(1, args.max_iterations + 1):
         print(f"[loop] Iteration {iteration} — running `{args.command}`")
@@ -197,64 +210,51 @@ def run_repair_iterations(args: argparse.Namespace, options: RuntimeOptions) -> 
             print(f"[loop] CI command succeeded on iteration {iteration}.")
             return
         failure_ctx = build_failure_context(args, result, coverage_report)
-        git_status = gather_git_status()
-        git_diff = gather_git_diff(staged=False)
         request_and_apply_patches(
             args=args,
             options=options,
             failure_ctx=failure_ctx,
             iteration=iteration,
-            git_status=git_status,
-            git_diff=git_diff,
             seen_patches=seen_patches,
         )
     raise PatchLifecycleAbort.attempts_exhausted()
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+    """Parse command-line arguments for the workflow CLI."""
     parser = argparse.ArgumentParser(description="Automate CI fixes via Codex.")
     parser.add_argument(
         "--command",
-        default="./scripts/ci.sh",
-        help="Command to run for CI (default: %(default)s)",
+        help="Command to run for CI (initial: ./scripts/ci.sh)",
     )
     parser.add_argument(
         "--max-iterations",
         type=int,
-        default=5,
-        help="Maximum Codex-assisted fix attempts (default: %(default)s)",
+        help="Maximum Codex-assisted fix attempts (initial: 5)",
     )
     parser.add_argument(
         "--log-tail",
         type=int,
-        default=200,
-        help="Number of log lines from the failure to send to Codex (default: %(default)s)",
+        help="Number of log lines from the failure to send to Codex (initial: 200)",
     )
     parser.add_argument(
         "--model",
-        help=f"Codex model name (default/required: {REQUIRED_MODEL})",
+        help=f"Codex model name (required: {REQUIRED_MODEL})",
     )
     parser.add_argument(
         "--reasoning-effort",
         choices=REASONING_EFFORT_CHOICES,
-        help=(
-            "Reasoning effort hint for Codex " f"(default: {DEFAULT_REASONING_EFFORT})"
-        ),
+        help=f"Reasoning effort hint for Codex (initial: {DEFAULT_REASONING_EFFORT})",
     )
     parser.add_argument(
         "--max-patch-lines",
         type=int,
-        default=1500,
-        help="Abort if Codex suggests touching more than this many lines (default: %(default)s)",
+        help="Abort if Codex suggests touching more than this many lines (initial: 1500)",
     )
     parser.add_argument(
         "--patch-approval-mode",
         choices=("prompt", "auto"),
-        default="prompt",
-        help=(
-            "Control whether patch application requires approval "
-            "(default: %(default)s)"
-        ),
+        help="Control whether patch application requires approval (initial: prompt)",
     )
     parser.add_argument(
         "--auto-stage",
@@ -268,7 +268,6 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--commit-extra-context",
-        default="",
         help="Additional instructions for the commit message prompt.",
     )
     parser.add_argument(
@@ -278,23 +277,32 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--env-file",
-        default="~/.env",
-        help="Path to dotenv file for Codex CLI environment defaults (default: %(default)s)",
+        help="Path to dotenv file for Codex CLI environment initial values (initial: ~/.env)",
     )
     parser.add_argument(
         "--patch-retries",
         type=int,
-        default=1,
-        help="Number of additional patch attempts when apply fails (default: %(default)s)",
+        help="Number of additional patch attempts when apply fails (initial: 1)",
+    )
+    parser.set_defaults(
+        command="./scripts/ci.sh",
+        max_iterations=5,
+        log_tail=200,
+        max_patch_lines=1500,
+        patch_approval_mode="prompt",
+        commit_extra_context="",
+        env_file="~/.env",
+        patch_retries=1,
     )
     parsed_args = list(argv) if argv is not None else None
     return parser.parse_args(parsed_args)
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
+    """Entry point for running the CI automation workflow."""
     args = parse_args(argv)
-    options = configure_runtime(args)
     try:
+        options = configure_runtime(args)
         dry_run_exit = perform_dry_run(args, options)
         if dry_run_exit is not None:
             return dry_run_exit

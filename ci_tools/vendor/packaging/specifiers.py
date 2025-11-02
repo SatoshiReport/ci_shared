@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar
+from operator import eq, ge, gt, le, lt, ne
+from typing import Iterable, Iterator, List, TypeVar
 
+from ..._messages import format_default_message
 from .version import InvalidVersion, Version
 
 _SPEC_PATTERN = re.compile(r"\s*(===|==|!=|~=|>=|<=|>|<)\s*(.+)\s*$")
@@ -18,19 +20,23 @@ class InvalidSpecifier(ValueError):
     default_message = "Invalid version specifier"
 
     def __init__(self, *, detail: str | None = None) -> None:
-        message = self.default_message if detail is None else f"{self.default_message}: {detail}"
+        """Initialise the error with an optional detail string."""
+        message = format_default_message(self.default_message, detail)
         super().__init__(message)
 
     @classmethod
     def for_value(cls, spec: str) -> "InvalidSpecifier":
+        """Return an error describing the invalid spec string."""
         return cls(detail=f"unable to parse {spec!r}")
 
     @classmethod
     def unsupported_wildcard_operator(cls, operator: str) -> "InvalidSpecifier":
+        """Return an error describing an unsupported wildcard operator."""
         return cls(detail=f"unsupported wildcard operator {operator!r}")
 
     @classmethod
     def unsupported_operator(cls, operator: str) -> "InvalidSpecifier":
+        """Return an error describing an unsupported comparison operator."""
         return cls(detail=f"unsupported operator {operator!r}")
 
 
@@ -45,6 +51,7 @@ class Specifier:
     version: str
 
     def __init__(self, spec: str) -> None:
+        """Parse the specifier string into operator and version components."""
         match = _SPEC_PATTERN.fullmatch(spec)
         if not match:
             raise InvalidSpecifier.for_value(spec)
@@ -55,10 +62,12 @@ class Specifier:
         return f"{self.operator}{self.version}"
 
     def _matches_wildcard(self, candidate: str) -> bool:
+        """Return True when the wildcard operator matches the candidate."""
         prefix = _STAR_PATTERN.split(self.version, 1)[0]
         return candidate.startswith(prefix)
 
     def _handle_wildcard(self, candidate: str) -> bool:
+        """Evaluate wildcard comparisons for equality and inequality."""
         op = self.operator
         if op == "==":
             return self._matches_wildcard(candidate)
@@ -73,25 +82,26 @@ class Specifier:
         spec_version: Version,
         raw_candidate: str,
     ) -> bool:
-        if op == "==":
-            return candidate_version == spec_version
-        if op == "!=":
-            return candidate_version != spec_version
-        if op == ">":
-            return candidate_version > spec_version
-        if op == ">=":
-            return candidate_version >= spec_version
-        if op == "<":
-            return candidate_version < spec_version
-        if op == "<=":
-            return candidate_version <= spec_version
-        if op == "===":
-            return raw_candidate == self.version
+        standard_ops = {
+            "==": eq,
+            "!=": ne,
+            ">": gt,
+            ">=": ge,
+            "<": lt,
+            "<=": le,
+        }
+
         if op == "~=":
             lower = spec_version
             upper = _compatible_upper_bound(spec_version)
             return lower <= candidate_version < upper
-        raise InvalidSpecifier.unsupported_operator(op)
+        if op == "===":
+            return raw_candidate == self.version
+        try:
+            comparator = standard_ops[op]
+        except KeyError as exc:  # pragma: no cover - defensive
+            raise InvalidSpecifier.unsupported_operator(op) from exc
+        return comparator(candidate_version, spec_version)
 
     def contains(self, candidate: str) -> bool:
         """Return True when *candidate* satisfies this specifier."""
@@ -107,6 +117,7 @@ class Specifier:
 
 
 def _compatible_upper_bound(version: Version) -> Version:
+    """Return the upper bound for compatible release comparisons."""
     components = list(version.release)
     if len(components) >= 2:
         components[1] += 1
@@ -136,7 +147,9 @@ class SpecifierSet:
     def __str__(self) -> str:
         return ",".join(str(spec) for spec in self._specs)
 
-    def filter(self, iterable: Iterable[_T], prereleases: bool | None = None) -> Iterator[_T]:
+    def filter(
+        self, iterable: Iterable[_T], prereleases: bool | None = None
+    ) -> Iterator[_T]:
         """Yield items from *iterable* that satisfy every specifier."""
 
         del prereleases  # pragma: no cover - compatibility argument
@@ -150,6 +163,7 @@ class SpecifierSet:
 
 
 def _coerce_candidate(item: object) -> str:
+    """Return the string representation used for comparisons."""
     if isinstance(item, str):
         return item
     if hasattr(item, "value"):

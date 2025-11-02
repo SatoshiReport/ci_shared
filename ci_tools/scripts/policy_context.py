@@ -105,7 +105,10 @@ def normalize_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
 
 
 def normalize_path(path: Path) -> str:
-    return str(path.relative_to(ROOT)).replace("\\", "/")
+    try:
+        return str(path.relative_to(ROOT)).replace("\\", "/")
+    except ValueError:
+        return str(path).replace("\\", "/")
 
 
 def iter_python_files(bases: Sequence[Path]) -> Iterator[Path]:
@@ -123,11 +126,18 @@ def parse_ast(path: Path) -> ast.AST | None:
 
 
 def iter_module_contexts(
-    bases: Sequence[Path] = SCAN_DIRECTORIES,
+    bases: Sequence[Path] | None = None,
     *,
     include_source: bool = False,
     include_lines: bool = False,
 ) -> Iterator[ModuleContext]:
+    if bases is None:
+        src_dir = ROOT / "src"
+        tests_dir = ROOT / "tests"
+        if src_dir.exists() or tests_dir.exists():
+            bases = (src_dir, tests_dir)
+        else:
+            bases = (ROOT,)
     for path in iter_python_files(bases):
         try:
             text = path.read_text()
@@ -245,4 +255,35 @@ def handler_contains_suppression(
     return False
 
 
-__all__ = [name for name in globals() if not name.startswith("_")]
+__all__ = [
+    "ROOT",
+    "SCAN_DIRECTORIES",
+    "BANNED_KEYWORDS",
+    "FLAGGED_TOKENS",
+    "FUNCTION_LENGTH_THRESHOLD",
+    "BROAD_EXCEPT_SUPPRESSION",
+    "SILENT_HANDLER_SUPPRESSION",
+    "SUPPRESSION_PATTERNS",
+    "FORBIDDEN_SYNC_CALLS",
+    "LEGACY_GUARD_TOKENS",
+    "LEGACY_SUFFIXES",
+    "LEGACY_CONFIG_TOKENS",
+    "CONFIG_EXTENSIONS",
+    "BROAD_EXCEPTION_NAMES",
+    "FunctionEntry",
+    "ModuleContext",
+    "FunctionNormalizer",
+    "normalize_function",
+    "normalize_path",
+    "iter_python_files",
+    "parse_ast",
+    "iter_module_contexts",
+    "_resolve_default_argument",
+    "get_call_qualname",
+    "is_non_none_literal",
+    "is_logging_call",
+    "handler_has_raise",
+    "classify_handler",
+    "is_literal_none_guard",
+    "handler_contains_suppression",
+]
