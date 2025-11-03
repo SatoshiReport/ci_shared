@@ -120,5 +120,24 @@ CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 echo "Pushing to ${GIT_REMOTE}/${CURRENT_BRANCH}..."
 git push "${GIT_REMOTE}" "${CURRENT_BRANCH}"
 
+# Propagate ci_shared updates to consuming repositories (zeus, kalshi, aws)
+# This only runs when executed from the ci_shared repository itself
+if [ -f "${PROJECT_ROOT}/ci_tools/scripts/propagate_ci_shared.py" ]; then
+  echo ""
+  echo "Propagating ci_shared updates to consuming repositories..."
+  PROPAGATE_SCRIPT=$(python - <<'PY'
+import ci_tools
+from pathlib import Path
+print((Path(ci_tools.__file__).resolve().parent / 'scripts' / 'propagate_ci_shared.py').as_posix())
+PY
+  )
+  if python "${PROPAGATE_SCRIPT}"; then
+    echo "✓ Successfully propagated ci_shared updates"
+  else
+    echo "⚠️  Propagation encountered issues (see above)" >&2
+    echo "   Consuming repos may need manual submodule updates" >&2
+  fi
+fi
+
 echo "Done."
 exit 0

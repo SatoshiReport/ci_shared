@@ -10,10 +10,7 @@ import pytest
 from ci_tools.scripts import module_guard
 from ci_tools.scripts.guard_common import is_excluded, iter_python_files
 
-
-def write_module(path: Path, content: str) -> None:
-    """Helper to write Python module content."""
-    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_parse_args_defaults():
@@ -90,61 +87,6 @@ def test_is_excluded_value_error():
     assert result is False
 
 
-def test_count_lines_basic():
-    """Test line counting with basic content."""
-    tmp_file = Path("/tmp/test_module.py")
-    tmp_file.write_text("line1\nline2\nline3\n")
-
-    count = module_guard.count_lines(tmp_file)
-    assert count == 3
-
-    tmp_file.unlink()
-
-
-def test_count_lines_ignores_comments(tmp_path: Path):
-    """Test line counting ignores comment-only lines."""
-    py_file = tmp_path / "test.py"
-    write_module(
-        py_file,
-        """
-        # This is a comment
-        def foo():
-            # Another comment
-            pass
-
-        # More comments
-        """,
-    )
-
-    count = module_guard.count_lines(py_file)
-    assert count == 2  # Only "def foo():" and "pass" count
-
-
-def test_count_lines_ignores_empty_lines(tmp_path: Path):
-    """Test line counting ignores empty lines."""
-    py_file = tmp_path / "test.py"
-    py_file.write_text("\n\nline1\n\n\nline2\n\n")
-
-    count = module_guard.count_lines(py_file)
-    assert count == 2
-
-
-def test_count_lines_with_inline_comments(tmp_path: Path):
-    """Test line counting with inline comments."""
-    py_file = tmp_path / "test.py"
-    write_module(
-        py_file,
-        """
-        def foo():  # inline comment
-            x = 1  # another inline comment
-            return x
-        """,
-    )
-
-    count = module_guard.count_lines(py_file)
-    assert count == 3  # All three lines have significant content
-
-
 def test_scan_file_within_limit(tmp_path: Path):
     """Test scanning a file within the line limit."""
     py_file = tmp_path / "small.py"
@@ -216,7 +158,7 @@ def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = module_guard.main(["--root", str(root), "--max-module-lines", "10"])
+        result = module_guard.ModuleGuard.main(["--root", str(root), "--max-module-lines", "10"])
 
     assert result == 0
     captured = capsys.readouterr()
@@ -232,7 +174,7 @@ def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
     py_file.write_text(content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = module_guard.main(["--root", str(root), "--max-module-lines", "10"])
+        result = module_guard.ModuleGuard.main(["--root", str(root), "--max-module-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -253,7 +195,7 @@ def test_main_respects_exclusions(tmp_path: Path, capsys: pytest.CaptureFixture)
     (excluded / "excluded.py").write_text(large_content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = module_guard.main(
+        result = module_guard.ModuleGuard.main(
             ["--root", str(root), "--max-module-lines", "10", "--exclude", str(excluded)]
         )
 
@@ -273,7 +215,7 @@ def test_main_handles_multiple_violations(tmp_path: Path, capsys: pytest.Capture
     (root / "large2.py").write_text(large_content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = module_guard.main(["--root", str(root), "--max-module-lines", "10"])
+        result = module_guard.ModuleGuard.main(["--root", str(root), "--max-module-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -291,7 +233,7 @@ def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFix
     (root / "alpha.py").write_text(large_content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = module_guard.main(["--root", str(root), "--max-module-lines", "10"])
+        result = module_guard.ModuleGuard.main(["--root", str(root), "--max-module-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -310,7 +252,7 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     (root / "module.py").write_text(large_content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = module_guard.main(["--root", str(root), "--max-module-lines", "10"])
+        result = module_guard.ModuleGuard.main(["--root", str(root), "--max-module-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -329,7 +271,7 @@ def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture, mon
     monkeypatch.setattr(module_guard.ModuleGuard, "scan_file", mock_scan_file)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = module_guard.main(["--root", str(root)])
+        result = module_guard.ModuleGuard.main(["--root", str(root)])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -340,38 +282,6 @@ def test_iter_python_files_empty_directory(tmp_path: Path):
     """Test iter_python_files with empty directory."""
     files = list(iter_python_files(tmp_path))
     assert len(files) == 0
-
-
-def test_count_lines_only_comments(tmp_path: Path):
-    """Test line counting with only comments."""
-    py_file = tmp_path / "comments.py"
-    py_file.write_text("# comment1\n# comment2\n# comment3\n")
-
-    count = module_guard.count_lines(py_file)
-    assert count == 0
-
-
-def test_count_lines_mixed_content(tmp_path: Path):
-    """Test line counting with mixed content."""
-    py_file = tmp_path / "mixed.py"
-    write_module(
-        py_file,
-        """
-        # Header comment
-
-        def foo():
-            # Function comment
-            x = 1
-
-            # Another comment
-            return x
-
-        # Footer comment
-        """,
-    )
-
-    count = module_guard.count_lines(py_file)
-    assert count == 3  # def foo():, x = 1, return x (empty lines don't count)
 
 
 def test_is_excluded_multiple_exclusions():

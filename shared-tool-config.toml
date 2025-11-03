@@ -1,0 +1,74 @@
+# =============================================================================
+# Shared Tool Configuration for CI Pipeline
+# =============================================================================
+#
+# This file contains standardized tool configurations used across ALL repositories
+# (zeus, kalshi, aws, ci_shared) to ensure consistent CI behavior.
+#
+# WHY THIS EXISTS:
+#   - Each repo has its own pyproject.toml with repo-specific metadata/dependencies
+#   - However, tool configurations (ruff, bandit, pytest, etc.) should be identical
+#   - This file is the single source of truth for [tool.*] sections
+#
+# CONSUMING REPOSITORIES (zeus, kalshi, aws):
+#
+# 1. Initial Setup - Copy tool configs to your pyproject.toml:
+#      cd /path/to/your/repo
+#      python -m ci_tools.scripts.tool_config_guard --sync
+#
+# 2. Validation - Check if your configs match:
+#      python -m ci_tools.scripts.tool_config_guard
+#
+# 3. Keep in Sync - When this file is updated, re-run sync:
+#      python -m ci_tools.scripts.tool_config_guard --sync
+#
+# NOTES:
+#   - Only [tool.*] sections are standardized
+#   - Project metadata ([project], [build-system]) remains repo-specific
+#   - Dependencies remain repo-specific
+#   - The guard validates but doesn't auto-modify (prevents corruption)
+#
+# =============================================================================
+#
+# NOTE: [tool.deptry] is intentionally EXCLUDED because each repository has
+# different dependencies, package structures, and ignore rules. Deptry configs
+# should remain repository-specific.
+# =============================================================================
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = [
+    "--tb=short",  # Shorter tracebacks
+    "-q",          # Quiet mode (less output)
+]
+
+[tool.coverage.run]
+omit = [
+    "*/vendor/*",
+    "*/__main__.py",
+]
+
+[tool.bandit]
+# Skip checks that are expected/acceptable in our codebase
+skips = [
+    "B101",  # assert_used - used appropriately in tests
+    "B404",  # import_subprocess - required for CI automation
+    "B603",  # subprocess_without_shell_equals_true - our subprocess calls are safe
+    "B607",  # start_process_with_partial_path - standard system commands (git, etc.)
+]
+exclude_dirs = ["/vendor/", "/.venv/", "/venv/"]
+
+[tool.ruff.lint]
+select = ["TRY", "C90", "PLR"]  # C90=McCabe complexity, PLR=Pylint refactor
+ignore = []
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 7
+max-branches = 10
+max-statements = 50
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["TRY002", "TRY003", "TRY203"]

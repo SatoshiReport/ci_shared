@@ -23,11 +23,7 @@ from ci_tools.scripts.policy_collectors_ast import (
 )
 from ci_tools.scripts.policy_context import contains_literal_dataset
 
-
-def write_module(path: Path, source: str) -> None:
-    """Helper to write a Python module."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(textwrap.dedent(source).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_contains_literal_dataset_constant():

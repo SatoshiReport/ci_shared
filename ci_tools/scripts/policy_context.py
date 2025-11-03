@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import ast
-import copy
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, List, Optional, Sequence
 
-from ci_tools.scripts.guard_common import iter_python_files, normalize_path
+from ci_tools.scripts.guard_common import (
+    iter_python_files,
+    parse_python_ast,
+    relative_path,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SCAN_DIRECTORIES: Sequence[Path] = (ROOT / "src", ROOT / "tests")
@@ -93,7 +97,7 @@ class FunctionNormalizer(ast.NodeTransformer):
 
 
 def normalize_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-    clone = copy.deepcopy(node)
+    clone = deepcopy(node)
     if (
         clone.body
         and isinstance(clone.body[0], ast.Expr)
@@ -106,11 +110,30 @@ def normalize_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     return ast.dump(clone, annotate_fields=False, include_attributes=False)
 
 
-def parse_ast(path: Path) -> ast.AST | None:
+def _determine_default_bases() -> Sequence[Path]:
+    """Determine the default base directories for scanning."""
+    src_dir = ROOT / "src"
+    tests_dir = ROOT / "tests"
+    if src_dir.exists() or tests_dir.exists():
+        return (src_dir, tests_dir)
+    return (ROOT,)
+
+
+def _load_module_text(
+    path: Path, include_source: bool, include_lines: bool
+) -> tuple[Optional[str], Optional[List[str]]]:
+    """Load source text and lines if requested."""
+    if not (include_source or include_lines):
+        return None, None
+
     try:
-        return ast.parse(path.read_text())
-    except Exception:  # pragma: no cover - defensive
-        return None
+        text = path.read_text()
+    except UnicodeDecodeError:
+        return None, None
+
+    source = text if include_source else None
+    lines = text.splitlines() if include_lines else None
+    return source, lines
 
 
 def iter_module_contexts(
@@ -120,24 +143,19 @@ def iter_module_contexts(
     include_lines: bool = False,
 ) -> Iterator[ModuleContext]:
     if bases is None:
-        src_dir = ROOT / "src"
-        tests_dir = ROOT / "tests"
-        if src_dir.exists() or tests_dir.exists():
-            bases = (src_dir, tests_dir)
-        else:
-            bases = (ROOT,)
+        bases = _determine_default_bases()
+
     for path in iter_python_files(bases):
-        try:
-            text = path.read_text()
-        except UnicodeDecodeError:
+        tree = parse_python_ast(path, raise_on_error=False)
+        if tree is None:
             continue
-        try:
-            tree = ast.parse(text, filename=str(path))
-        except SyntaxError:
+
+        rel_path = str(relative_path(path, ROOT, as_string=True))
+        source, lines = _load_module_text(path, include_source, include_lines)
+
+        if source is None and lines is None and (include_source or include_lines):
             continue
-        rel_path = normalize_path(path, ROOT)
-        source = text if include_source else None
-        lines = text.splitlines() if include_lines else None
+
         yield ModuleContext(
             path=path,
             rel_path=rel_path,
@@ -145,20 +163,6 @@ def iter_module_contexts(
             source=source,
             lines=lines,
         )
-
-
-def _resolve_default_argument(
-    call: ast.Call,
-    *,
-    positional_index: int,
-    keyword_names: set[str],
-) -> ast.AST | None:
-    if len(call.args) > positional_index:
-        return call.args[positional_index]
-    for keyword in call.keywords:
-        if keyword.arg in keyword_names:
-            return keyword.value
-    return None
 
 
 def get_call_qualname(node: ast.AST) -> str | None:
@@ -278,7 +282,6 @@ __all__ = [
     "ModuleContext",
     "FunctionNormalizer",
     "normalize_function",
-    "parse_ast",
     "iter_module_contexts",
     "get_call_qualname",
     "contains_literal_dataset",

@@ -5,9 +5,13 @@ from __future__ import annotations
 
 import sys
 
-from .policy_checks import PolicyViolation
+from .policy_checks import (
+    purge_bytecode_artifacts,  # Re-exported for external consumers
+)
+from .policy_checks import (
+    PolicyViolation,
+)
 from .policy_checks import main as _run_policy_checks
-from .policy_checks import purge_bytecode_artifacts
 
 __all__ = ["PolicyViolation", "purge_bytecode_artifacts", "main"]
 

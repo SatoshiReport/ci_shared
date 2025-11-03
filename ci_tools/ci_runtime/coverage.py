@@ -7,6 +7,9 @@ from typing import Optional
 from .config import COVERAGE_THRESHOLD
 from .models import CoverageCheckResult, CoverageDeficit
 
+# Coverage table format: Name Stmts Miss Cover
+MIN_COVERAGE_ROW_TOKENS = 4
+
 
 def _find_coverage_table(lines: list[str]) -> Optional[list[str]]:
     """Return the lines that compose the coverage table in the pytest report."""
@@ -37,7 +40,7 @@ def _parse_coverage_entries(
         if not stripped or stripped.startswith("-"):
             continue
         tokens = row.split()
-        if len(tokens) < 4:
+        if len(tokens) < MIN_COVERAGE_ROW_TOKENS:
             continue
         cover_token = tokens[-1]
         if not cover_token.endswith("%"):

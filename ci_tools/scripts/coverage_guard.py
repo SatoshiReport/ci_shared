@@ -13,19 +13,9 @@ from typing import Iterable, List, Sequence
 from coverage import Coverage
 from coverage.exceptions import CoverageException, NoDataError, NoSource
 
+from ci_tools.scripts.guard_common import detect_repo_root
 
-def find_repo_root() -> Path:
-    """Find repository root by looking for .git directory."""
-    current = Path.cwd().resolve()
-    while current != current.parent:
-        if (current / ".git").exists():
-            return current
-        current = current.parent
-    # Fallback to current working directory
-    return Path.cwd().resolve()
-
-
-ROOT = find_repo_root()
+ROOT = detect_repo_root()
 
 
 @dataclass(frozen=True)
@@ -101,7 +91,8 @@ def collect_results(cov: Coverage, prefixes: Sequence[Path]) -> List[CoverageRes
     try:
         cov.load()
     except NoDataError as exc:
-        raise SystemExit(f"coverage_guard: no data found ({exc})") from exc
+        msg = f"coverage_guard: no data found ({exc})"
+        raise SystemExit(msg) from exc
     data = cov.get_data()
     results: List[CoverageResult] = []
     for filename in sorted(data.measured_files()):

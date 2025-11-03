@@ -11,11 +11,13 @@ import argparse
 import ast
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from ci_tools.scripts.guard_common import (
     GuardRunner,
-    make_relative_path,
+    iter_ast_nodes,
+    parse_python_ast,
+    relative_path,
 )
 
 
@@ -41,9 +43,9 @@ def extract_base_names(node: ast.ClassDef) -> List[str]:
 def build_class_hierarchy(tree: ast.AST) -> Dict[str, List[str]]:
     """Build a map of class_name -> list of base_class_names."""
     hierarchy: Dict[str, List[str]] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            hierarchy[node.name] = extract_base_names(node)
+    for node in iter_ast_nodes(tree, ast.ClassDef):
+        assert isinstance(node, ast.ClassDef)  # Type narrowing for pyright
+        hierarchy[node.name] = extract_base_names(node)
     return hierarchy
 
 
@@ -108,28 +110,22 @@ class InheritanceGuard(GuardRunner):
 
     def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
         """Scan a file for inheritance depth violations."""
-        source = path.read_text()
-        try:
-            tree = ast.parse(source, filename=str(path))
-        except SyntaxError as exc:
-            raise RuntimeError(
-                f"failed to parse Python source: {path} ({exc})"
-            ) from exc
-
+        tree = parse_python_ast(path)
+        assert tree is not None  # parse_python_ast raises on error by default
         hierarchy = build_class_hierarchy(tree)
         violations: List[str] = []
 
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                depth = calculate_depth(node.name, hierarchy)
-                if depth > args.max_depth:
-                    base_names = extract_base_names(node)
-                    relative = make_relative_path(path, self.repo_root)
-                    bases_str = ", ".join(base_names) if base_names else "(none)"
-                    violations.append(
-                        f"{relative}:{node.lineno} class {node.name} has inheritance "
-                        f"depth {depth} (limit {args.max_depth}) - bases: {bases_str}"
-                    )
+        for node in iter_ast_nodes(tree, ast.ClassDef):
+            assert isinstance(node, ast.ClassDef)  # Type narrowing for pyright
+            depth = calculate_depth(node.name, hierarchy)
+            if depth > args.max_depth:
+                base_names = extract_base_names(node)
+                rel_path = relative_path(path, self.repo_root)
+                bases_str = ", ".join(base_names) if base_names else "(none)"
+                violations.append(
+                    f"{rel_path}:{node.lineno} class {node.name} has inheritance "
+                    f"depth {depth} (limit {args.max_depth}) - bases: {bases_str}"
+                )
 
         return violations
 
@@ -147,11 +143,5 @@ class InheritanceGuard(GuardRunner):
         )
 
 
-def main(argv: Optional[Iterable[str]] = None) -> int:
-    """Main entry point for inheritance_guard."""
-    guard = InheritanceGuard()
-    return guard.run(argv)
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(InheritanceGuard.main())

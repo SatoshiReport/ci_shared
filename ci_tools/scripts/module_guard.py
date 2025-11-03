@@ -5,24 +5,14 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import List
 
 from ci_tools.scripts.guard_common import (
     GuardRunner,
-    make_relative_path,
+    count_significant_lines,
+    parse_python_ast,
+    relative_path,
 )
-
-
-def count_lines(path: Path) -> int:
-    """Count non-empty, non-comment-only lines in a Python module."""
-    lines = path.read_text().splitlines()
-    significant_lines = 0
-    for line in lines:
-        stripped = line.strip()
-        # Count non-empty lines that aren't just comments
-        if stripped and not stripped.startswith("#"):
-            significant_lines += 1
-    return significant_lines
 
 
 class ModuleGuard(GuardRunner):
@@ -47,14 +37,19 @@ class ModuleGuard(GuardRunner):
     def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
         """Scan a file for module size violations."""
         try:
-            line_count = count_lines(path)
-        except (OSError, UnicodeDecodeError) as exc:
-            raise RuntimeError(f"failed to read Python source: {path} ({exc})") from exc
+            tree = parse_python_ast(path, raise_on_error=True)
+        except RuntimeError as exc:
+            # Re-raise with consistent error message for backward compatibility
+            raise RuntimeError(
+                str(exc).replace("failed to parse", "failed to read")
+            ) from exc.__cause__
 
+        assert tree is not None  # parse_python_ast raises on error when raise_on_error=True
+        line_count = count_significant_lines(tree)
         if line_count > args.max_module_lines:
-            relative = make_relative_path(path, self.repo_root)
+            rel_path = relative_path(path, self.repo_root)
             return [
-                f"{relative} contains {line_count} lines "
+                f"{rel_path} contains {line_count} lines "
                 f"(limit {args.max_module_lines})"
             ]
         return []
@@ -67,11 +62,5 @@ class ModuleGuard(GuardRunner):
         )
 
 
-def main(argv: Optional[Iterable[str]] = None) -> int:
-    """Main entry point for module_guard."""
-    guard = ModuleGuard()
-    return guard.run(argv)
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(ModuleGuard.main())

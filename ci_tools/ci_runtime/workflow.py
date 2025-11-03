@@ -13,6 +13,8 @@ from .config import (
     DEFAULT_REASONING_EFFORT,
     REASONING_EFFORT_CHOICES,
     REQUIRED_MODEL,
+    resolve_model_choice,
+    resolve_reasoning_choice,
 )
 from .coverage import extract_coverage_deficits
 from .environment import load_env_settings
@@ -27,33 +29,6 @@ from .models import (
 )
 from .patch_cycle import request_and_apply_patches
 from .process import gather_git_diff, run_command
-
-
-def _resolve_model_choice(model_arg: Optional[str]) -> str:
-    """Validate the requested Codex model against the one we support."""
-    candidate = model_arg or os.environ.get("OPENAI_MODEL") or REQUIRED_MODEL
-    if candidate != REQUIRED_MODEL:
-        raise ModelSelectionAbort.unsupported_model(
-            received=candidate, required=REQUIRED_MODEL
-        )
-    os.environ["OPENAI_MODEL"] = candidate
-    return candidate
-
-
-def _resolve_reasoning_choice(reasoning_arg: Optional[str]) -> str:
-    """Determine the reasoning effort flag to send to Codex."""
-    env_reasoning = os.environ.get("OPENAI_REASONING_EFFORT")
-    candidate = (
-        reasoning_arg
-        or (env_reasoning.lower() if env_reasoning else None)
-        or DEFAULT_REASONING_EFFORT
-    )
-    if candidate not in REASONING_EFFORT_CHOICES:
-        raise ReasoningEffortAbort.unsupported_choice(
-            received=candidate, allowed=REASONING_EFFORT_CHOICES
-        )
-    os.environ["OPENAI_REASONING_EFFORT"] = candidate
-    return candidate
 
 
 def _derive_runtime_flags(
@@ -79,8 +54,8 @@ def configure_runtime(args: argparse.Namespace) -> RuntimeOptions:
     """Convert parsed CLI arguments into the runtime options dataclass."""
     load_env_settings(args.env_file)
     command_tokens = shlex.split(args.command)
-    model_name = _resolve_model_choice(args.model)
-    reasoning_effort = _resolve_reasoning_choice(args.reasoning_effort)
+    model_name = resolve_model_choice(args.model, validate=True)
+    reasoning_effort = resolve_reasoning_choice(args.reasoning_effort, validate=True)
     (
         automation_mode,
         command_env,

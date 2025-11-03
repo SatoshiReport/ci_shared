@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,32 +31,79 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _check_single_directory(
+    base_dir: Path,
+    readme_path: str | None,
+    has_content_check: Callable[[Path], bool] | None,
+) -> List[str]:
+    """Check if a single directory requires a README."""
+    if has_content_check and not has_content_check(base_dir):
+        return []
+    return [readme_path] if readme_path else []
+
+
+def _should_skip_directory(item: Path) -> bool:
+    """Check if a directory should be skipped during scanning."""
+    return not item.is_dir() or item.name.startswith("_") or item.name == ".git"
+
+
+def _scan_subdirectories(
+    base_dir: Path,
+    path_prefix: str,
+    has_content_check: Callable[[Path], bool] | None,
+) -> List[str]:
+    """Scan subdirectories and collect README requirements."""
+    required = []
+    for item in base_dir.iterdir():
+        if _should_skip_directory(item):
+            continue
+        if has_content_check and not has_content_check(item):
+            continue
+        readme = f"{path_prefix}/{item.name}/README.md"
+        required.append(readme)
+    return required
+
+
+def _discover_readme_requirements(
+    base_dir: Path,
+    readme_path: str | None = None,
+    path_prefix: str | None = None,
+    has_content_check: Callable[[Path], bool] | None = None,
+    scan_subdirs: bool = False,
+) -> List[str]:
+    """Generic helper to discover README.md requirements.
+
+    Args:
+        base_dir: Directory to check or scan
+        readme_path: Path for single README requirement (used when scan_subdirs=False)
+        path_prefix: Prefix for generated paths when scanning subdirs (e.g., "src", "docs/domains")
+        has_content_check: Optional callable to check if dir/subdir has relevant content
+        scan_subdirs: If True, scan subdirectories; if False, check single directory
+
+    Returns:
+        List of required README.md paths
+    """
+    if not base_dir.exists():
+        return []
+
+    if not scan_subdirs:
+        return _check_single_directory(base_dir, readme_path, has_content_check)
+
+    assert path_prefix is not None  # scan_subdirs requires path_prefix
+    return _scan_subdirectories(base_dir, path_prefix, has_content_check)
+
+
 def discover_src_modules(root: Path) -> List[str]:
     """Auto-discover all top-level modules in src/ that need README.md files.
 
     Returns paths like: src/collect_data/README.md, src/modeling/README.md
     """
-    required = []
-    src_dir = root / "src"
-
-    if not src_dir.exists():
-        return required
-
-    for item in src_dir.iterdir():
-        if not item.is_dir():
-            continue
-        if item.name.startswith("_"):  # Skip __pycache__, etc.
-            continue
-        if item.name == ".git":
-            continue
-
-        # Count Python files in this module
-        py_files = list(item.rglob("*.py"))
-        if len(py_files) > 0:  # If it has any Python files, it needs a README
-            readme_path = f"src/{item.name}/README.md"
-            required.append(readme_path)
-
-    return required
+    return _discover_readme_requirements(
+        root / "src",
+        path_prefix="src",
+        has_content_check=lambda d: len(list(d.rglob("*.py"))) > 0,
+        scan_subdirs=True,
+    )
 
 
 def discover_architecture_docs(root: Path) -> List[str]:
@@ -64,18 +111,12 @@ def discover_architecture_docs(root: Path) -> List[str]:
 
     If docs/architecture/ exists and has .md files, require docs/architecture/README.md
     """
-    required = []
-    arch_dir = root / "docs" / "architecture"
-
-    if not arch_dir.exists():
-        return required
-
-    # If architecture directory exists, it needs a README
-    md_files = list(arch_dir.glob("*.md"))
-    if len(md_files) > 0:
-        required.append("docs/architecture/README.md")
-
-    return required
+    return _discover_readme_requirements(
+        root / "docs" / "architecture",
+        readme_path="docs/architecture/README.md",
+        has_content_check=lambda d: len(list(d.glob("*.md"))) > 0,
+        scan_subdirs=False,
+    )
 
 
 def discover_domain_docs(root: Path) -> List[str]:
@@ -83,23 +124,11 @@ def discover_domain_docs(root: Path) -> List[str]:
 
     Each subdirectory in docs/domains/ needs a README.md
     """
-    required = []
-    domains_dir = root / "docs" / "domains"
-
-    if not domains_dir.exists():
-        return required
-
-    for item in domains_dir.iterdir():
-        if not item.is_dir():
-            continue
-        if item.name.startswith("_"):
-            continue
-
-        # Each domain needs a README
-        readme_path = f"docs/domains/{item.name}/README.md"
-        required.append(readme_path)
-
-    return required
+    return _discover_readme_requirements(
+        root / "docs" / "domains",
+        path_prefix="docs/domains",
+        scan_subdirs=True,
+    )
 
 
 def discover_operations_docs(root: Path) -> List[str]:
@@ -107,13 +136,11 @@ def discover_operations_docs(root: Path) -> List[str]:
 
     If docs/operations/ exists, it needs a README.md
     """
-    required = []
-    ops_dir = root / "docs" / "operations"
-
-    if ops_dir.exists():
-        required.append("docs/operations/README.md")
-
-    return required
+    return _discover_readme_requirements(
+        root / "docs" / "operations",
+        readme_path="docs/operations/README.md",
+        scan_subdirs=False,
+    )
 
 
 def discover_reference_docs(root: Path) -> List[str]:
@@ -121,23 +148,11 @@ def discover_reference_docs(root: Path) -> List[str]:
 
     Each subdirectory in docs/reference/ needs a README.md
     """
-    required = []
-    ref_dir = root / "docs" / "reference"
-
-    if not ref_dir.exists():
-        return required
-
-    for item in ref_dir.iterdir():
-        if not item.is_dir():
-            continue
-        if item.name.startswith("_"):
-            continue
-
-        # Each reference section needs a README
-        readme_path = f"docs/reference/{item.name}/README.md"
-        required.append(readme_path)
-
-    return required
+    return _discover_readme_requirements(
+        root / "docs" / "reference",
+        path_prefix="docs/reference",
+        scan_subdirs=True,
+    )
 
 
 def get_base_requirements(root: Path) -> List[str]:

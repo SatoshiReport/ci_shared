@@ -6,19 +6,15 @@ import argparse
 import ast
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import List
 
 from ci_tools.scripts.guard_common import (
     GuardRunner,
-    make_relative_path,
+    count_ast_node_lines,
+    iter_ast_nodes,
+    parse_python_ast,
+    relative_path,
 )
-
-
-def count_function_lines(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
-    """Count lines spanned by a function definition."""
-    if not hasattr(node, "end_lineno") or node.end_lineno is None:
-        return 0
-    return node.end_lineno - node.lineno + 1
 
 
 class FunctionSizeGuard(GuardRunner):
@@ -42,23 +38,20 @@ class FunctionSizeGuard(GuardRunner):
 
     def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
         """Scan a file for function size violations."""
-        try:
-            content = path.read_text()
-            tree = ast.parse(content, filename=str(path))
-        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
-            print(f"{self.name}: failed to parse {path}: {exc}", file=sys.stderr)
+        tree = parse_python_ast(path, raise_on_error=False)
+        if tree is None:
             return []
 
         violations: List[str] = []
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                line_count = count_function_lines(node)
-                if line_count > args.max_function_lines:
-                    relative = make_relative_path(path, self.repo_root)
-                    violations.append(
-                        f"{relative}::{node.name} (line {node.lineno}) contains {line_count} lines "
-                        f"(limit {args.max_function_lines})"
-                    )
+        for node in iter_ast_nodes(tree, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            assert isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))  # Type narrowing
+            line_count = count_ast_node_lines(node)
+            if line_count > args.max_function_lines:
+                rel_path = relative_path(path, self.repo_root)
+                violations.append(
+                    f"{rel_path}::{node.name} (line {node.lineno}) contains {line_count} lines "
+                    f"(limit {args.max_function_lines})"
+                )
 
         return violations
 
@@ -70,33 +63,5 @@ class FunctionSizeGuard(GuardRunner):
         )
 
 
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
-    """Parse command-line arguments (backward compatibility wrapper)."""
-    guard = FunctionSizeGuard()
-    return guard.parse_args(argv)
-
-
-def scan_file(path: Path, limit: int) -> List[Tuple[Path, str, int, int]]:
-    """Scan a file for function size violations (backward compatibility wrapper)."""
-    try:
-        content = path.read_text()
-        tree = ast.parse(content, filename=str(path))
-    except (OSError, UnicodeDecodeError, SyntaxError):
-        return []
-    violations: List[Tuple[Path, str, int, int]] = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            line_count = count_function_lines(node)
-            if line_count > limit:
-                violations.append((path, node.name, node.lineno, line_count))
-    return violations
-
-
-def main(argv: Optional[Iterable[str]] = None) -> int:
-    """Main entry point for function_size_guard."""
-    guard = FunctionSizeGuard()
-    return guard.run(argv)
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(FunctionSizeGuard.main())

@@ -8,10 +8,7 @@ import pytest
 
 from ci_tools.scripts import unused_module_guard
 
-
-def write_module(path: Path, content: str) -> None:
-    """Helper to write Python module content."""
-    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_import_collector_simple_import():

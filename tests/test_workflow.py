@@ -7,9 +7,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from ci_tools.ci_runtime.config import (
+    resolve_model_choice,
+    resolve_reasoning_choice,
+)
 from ci_tools.ci_runtime.workflow import (
-    _resolve_model_choice,
-    _resolve_reasoning_choice,
     _derive_runtime_flags,
     configure_runtime,
     perform_dry_run,
@@ -38,34 +40,34 @@ class TestResolveModelChoice:
 
     def test_accepts_required_model(self):
         """Test accepting the required model."""
-        result = _resolve_model_choice("gpt-5-codex")
+        result = resolve_model_choice("gpt-5-codex", validate=True)
         assert result == "gpt-5-codex"
         assert os.environ["OPENAI_MODEL"] == "gpt-5-codex"
 
     def test_rejects_unsupported_model(self):
         """Test rejecting unsupported model."""
         with pytest.raises(ModelSelectionAbort) as exc_info:
-            _resolve_model_choice("gpt-4")
+            resolve_model_choice("gpt-4", validate=True)
         assert "requires" in str(exc_info.value)
         assert "gpt-5-codex" in str(exc_info.value)
 
     def test_uses_env_var_when_no_arg(self):
         """Test using OPENAI_MODEL env var when no argument provided."""
         with patch.dict(os.environ, {"OPENAI_MODEL": "gpt-5-codex"}):
-            result = _resolve_model_choice(None)
+            result = resolve_model_choice(None, validate=True)
             assert result == "gpt-5-codex"
 
     def test_defaults_to_required_model(self):
         """Test defaulting to required model when no arg or env."""
         with patch.dict(os.environ, {}, clear=True):
-            result = _resolve_model_choice(None)
+            result = resolve_model_choice(None, validate=True)
             assert result == "gpt-5-codex"
 
     def test_rejects_env_var_with_wrong_model(self):
         """Test rejecting wrong model from environment variable."""
         with patch.dict(os.environ, {"OPENAI_MODEL": "gpt-3.5-turbo"}):
             with pytest.raises(ModelSelectionAbort):
-                _resolve_model_choice(None)
+                resolve_model_choice(None, validate=True)
 
 
 class TestResolveReasoningChoice:
@@ -73,42 +75,42 @@ class TestResolveReasoningChoice:
 
     def test_accepts_valid_low(self):
         """Test accepting 'low' reasoning effort."""
-        result = _resolve_reasoning_choice("low")
+        result = resolve_reasoning_choice("low", validate=True)
         assert result == "low"
         assert os.environ["OPENAI_REASONING_EFFORT"] == "low"
 
     def test_accepts_valid_medium(self):
         """Test accepting 'medium' reasoning effort."""
-        result = _resolve_reasoning_choice("medium")
+        result = resolve_reasoning_choice("medium", validate=True)
         assert result == "medium"
 
     def test_accepts_valid_high(self):
         """Test accepting 'high' reasoning effort."""
-        result = _resolve_reasoning_choice("high")
+        result = resolve_reasoning_choice("high", validate=True)
         assert result == "high"
 
     def test_rejects_invalid_choice(self):
         """Test rejecting invalid reasoning effort."""
         with pytest.raises(ReasoningEffortAbort) as exc_info:
-            _resolve_reasoning_choice("extreme")
+            resolve_reasoning_choice("extreme", validate=True)
         assert "expected one of" in str(exc_info.value)
 
     def test_uses_env_var_when_no_arg(self):
         """Test using OPENAI_REASONING_EFFORT env var."""
         with patch.dict(os.environ, {"OPENAI_REASONING_EFFORT": "MEDIUM"}):
-            result = _resolve_reasoning_choice(None)
+            result = resolve_reasoning_choice(None, validate=True)
             assert result == "medium"
 
     def test_defaults_to_high(self):
         """Test defaulting to 'high' when no arg or env."""
         with patch.dict(os.environ, {}, clear=True):
-            result = _resolve_reasoning_choice(None)
+            result = resolve_reasoning_choice(None, validate=True)
             assert result == "high"
 
     def test_case_insensitive_env_var(self):
         """Test environment variable is case-insensitive."""
         with patch.dict(os.environ, {"OPENAI_REASONING_EFFORT": "LOW"}):
-            result = _resolve_reasoning_choice(None)
+            result = resolve_reasoning_choice(None, validate=True)
             assert result == "low"
 
 
@@ -193,8 +195,8 @@ class TestConfigureRuntime:
     """Tests for configure_runtime function."""
 
     @patch("ci_tools.ci_runtime.workflow.load_env_settings")
-    @patch("ci_tools.ci_runtime.workflow._resolve_model_choice")
-    @patch("ci_tools.ci_runtime.workflow._resolve_reasoning_choice")
+    @patch("ci_tools.ci_runtime.config.resolve_model_choice")
+    @patch("ci_tools.ci_runtime.config.resolve_reasoning_choice")
     def test_creates_runtime_options(
         self, mock_reasoning, mock_model, mock_load_env
     ):
@@ -222,8 +224,8 @@ class TestConfigureRuntime:
         mock_load_env.assert_called_once_with("~/.env")
 
     @patch("ci_tools.ci_runtime.workflow.load_env_settings")
-    @patch("ci_tools.ci_runtime.workflow._resolve_model_choice")
-    @patch("ci_tools.ci_runtime.workflow._resolve_reasoning_choice")
+    @patch("ci_tools.ci_runtime.config.resolve_model_choice")
+    @patch("ci_tools.ci_runtime.config.resolve_reasoning_choice")
     def test_handles_automation_mode(
         self, mock_reasoning, mock_model, mock_load_env
     ):
@@ -249,8 +251,8 @@ class TestConfigureRuntime:
         assert options.auto_push_enabled is True
 
     @patch("ci_tools.ci_runtime.workflow.load_env_settings")
-    @patch("ci_tools.ci_runtime.workflow._resolve_model_choice")
-    @patch("ci_tools.ci_runtime.workflow._resolve_reasoning_choice")
+    @patch("ci_tools.ci_runtime.config.resolve_model_choice")
+    @patch("ci_tools.ci_runtime.config.resolve_reasoning_choice")
     def test_parses_command_with_spaces(
         self, mock_reasoning, mock_model, mock_load_env
     ):

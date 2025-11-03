@@ -18,12 +18,22 @@ classifiers = [
     "Topic :: Software Development :: Build Tools"
 ]
 
+[project.dependencies]
+# tomli is needed for Python 3.10 (tomllib is built-in for 3.11+)
+tomli = {version = ">=2.0.0", markers = "python_version < '3.11'"}
+
 [project.optional-dependencies]
 dev = [
     "jinja2>=3.1.0",
     "coverage>=7.5.0",
     "radon>=6.0.1",
 ]
+
+# =============================================================================
+# Repository-Specific Tool Configurations
+# =============================================================================
+# [tool.deptry] is repository-specific (different packages, dependencies, etc)
+# =============================================================================
 
 [tool.deptry]
 root = ["ci_tools", "scripts"]
@@ -43,10 +53,26 @@ include-package-data = true
 script-files = ["ci_tools/scripts/xci.sh"]
 
 [tool.setuptools.package-data]
-ci_tools = ["scripts/*.sh", "scripts/*.py", "vendor/**/*"]
+ci_tools = ["scripts/*.sh", "scripts/*.py", "vendor/**/*", "config/*"]
+
+# =============================================================================
+# Standardized Tool Configurations
+# =============================================================================
+# These [tool.*] sections are standardized across all repositories (zeus,
+# kalshi, aws, ci_shared) to ensure consistent CI behavior.
+#
+# Source of truth: shared-tool-config.toml
+#
+# To validate: python -m ci_tools.scripts.tool_config_guard
+# To sync: python -m ci_tools.scripts.tool_config_guard --sync
+# =============================================================================
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = [
+    "--tb=short",  # Shorter tracebacks
+    "-q",          # Quiet mode (less output)
+]
 
 [tool.coverage.run]
 omit = [
@@ -63,3 +89,19 @@ skips = [
     "B607",  # start_process_with_partial_path - standard system commands (git, etc.)
 ]
 exclude_dirs = ["/vendor/", "/.venv/", "/venv/"]
+
+[tool.ruff.lint]
+select = ["TRY", "C90", "PLR"]  # C90=McCabe complexity, PLR=Pylint re 
+ignore = []
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 7
+max-branches = 10
+max-statements = 50
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["TRY002", "TRY003", "TRY203", "PLR2004"]
+"ci_tools/vendor/**" = ["PLR2004", "C901", "PLR", "TRY"]

@@ -9,6 +9,7 @@ from coverage import Coverage
 from coverage.exceptions import CoverageException, NoDataError, NoSource
 
 from ci_tools.scripts import coverage_guard
+from ci_tools.scripts.guard_common import detect_repo_root
 
 
 class TestFindRepoRoot:
@@ -23,22 +24,29 @@ class TestFindRepoRoot:
         nested = repo / "src" / "module"
         nested.mkdir(parents=True)
 
-        with patch("pathlib.Path.cwd", return_value=nested):
-            root = coverage_guard.find_repo_root()
-            assert root == repo
+        # Mock both git command and Path.cwd for fallback
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
+            with patch("pathlib.Path.cwd", return_value=nested):
+                root = detect_repo_root()
+                assert root == repo
 
     def test_find_repo_root_no_git(self, tmp_path: Path) -> None:
         """Test finding root without .git directory."""
-        with patch("pathlib.Path.cwd", return_value=tmp_path):
-            root = coverage_guard.find_repo_root()
-            assert root == tmp_path
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
+            with patch("pathlib.Path.cwd", return_value=tmp_path):
+                root = detect_repo_root()
+                assert root == tmp_path
 
     def test_find_repo_root_at_filesystem_root(self) -> None:
         """Test finding root at filesystem root."""
         # Mock being at filesystem root
-        with patch("pathlib.Path.cwd", return_value=Path("/")):
-            root = coverage_guard.find_repo_root()
-            assert root == Path("/")
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
+            with patch("pathlib.Path.cwd", return_value=Path("/")):
+                root = detect_repo_root()
+                assert root == Path("/")
 
 
 class TestCoverageResult:

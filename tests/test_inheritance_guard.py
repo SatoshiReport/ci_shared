@@ -9,10 +9,7 @@ import pytest
 from ci_tools.scripts import inheritance_guard
 from ci_tools.scripts.guard_common import is_excluded, iter_python_files
 
-
-def write_module(path: Path, content: str) -> None:
-    """Helper to write Python module content."""
-    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_iter_python_files_single_file(tmp_path: Path):
@@ -228,7 +225,7 @@ def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = inheritance_guard.main(["--root", str(root), "--max-depth", "2"])
+        result = inheritance_guard.InheritanceGuard.main(["--root", str(root), "--max-depth", "2"])
 
     assert result == 0
     captured = capsys.readouterr()
@@ -257,7 +254,7 @@ def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = inheritance_guard.main(["--root", str(root), "--max-depth", "2"])
+        result = inheritance_guard.InheritanceGuard.main(["--root", str(root), "--max-depth", "2"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -286,7 +283,7 @@ def test_main_respects_exclusions(tmp_path: Path, capsys: pytest.CaptureFixture)
     write_module(excluded / "excluded.py", deep_hierarchy)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = inheritance_guard.main(
+        result = inheritance_guard.InheritanceGuard.main(
             ["--root", str(root), "--max-depth", "1", "--exclude", str(excluded)]
         )
 
@@ -313,7 +310,7 @@ def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFix
     write_module(root / "alpha.py", deep_hierarchy)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = inheritance_guard.main(["--root", str(root), "--max-depth", "1"])
+        result = inheritance_guard.InheritanceGuard.main(["--root", str(root), "--max-depth", "1"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -330,7 +327,7 @@ def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture):
     (root / "bad.py").write_text("class Foo:\n    def method(self\n")
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = inheritance_guard.main(["--root", str(root)])
+        result = inheritance_guard.InheritanceGuard.main(["--root", str(root)])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -341,7 +338,7 @@ def test_main_traverse_error(tmp_path: Path, capsys: pytest.CaptureFixture):
     """Test main function handles traversal errors."""
     missing = tmp_path / "missing"
 
-    result = inheritance_guard.main(["--root", str(missing)])
+    result = inheritance_guard.InheritanceGuard.main(["--root", str(missing)])
     assert result == 1
     captured = capsys.readouterr()
     assert "failed to traverse" in captured.err
@@ -388,7 +385,7 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = inheritance_guard.main(["--root", str(root), "--max-depth", "1"])
+        result = inheritance_guard.InheritanceGuard.main(["--root", str(root), "--max-depth", "1"])
 
     assert result == 1
     captured = capsys.readouterr()

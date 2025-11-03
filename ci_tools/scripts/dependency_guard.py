@@ -11,12 +11,17 @@ import argparse
 import ast
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import List, Optional
 
 from ci_tools.scripts.guard_common import (
     GuardRunner,
-    make_relative_path,
+    iter_ast_nodes,
+    parse_python_ast,
+    relative_path,
 )
+
+# Maximum classes to show in error message before truncating
+MAX_CLASSES_TO_DISPLAY = 5
 
 SKIPPED_CONSTRUCTOR_NAMES = {
     "Path",
@@ -48,9 +53,8 @@ def count_instantiations(func_node: ast.FunctionDef) -> tuple[int, List[str]]:
     """Count object instantiations (calls that look like constructors)."""
     count = 0
     instantiated_classes: List[str] = []
-    for node in ast.walk(func_node):
-        if not isinstance(node, ast.Call):
-            continue
+    for node in iter_ast_nodes(func_node, ast.Call):
+        assert isinstance(node, ast.Call)  # Type narrowing for pyright
         callee_name = _callee_name(node)
         if callee_name and _is_constructor_name(callee_name):
             count += 1
@@ -89,32 +93,26 @@ class DependencyGuard(GuardRunner):
                 continue
             count, instantiated = count_instantiations(item)
             if count > max_inst:
-                relative = make_relative_path(path, self.repo_root)
-                classes_str = ", ".join(instantiated[:5])
-                if len(instantiated) > 5:
-                    classes_str += f", ... ({len(instantiated) - 5} more)"
+                rel_path = relative_path(path, self.repo_root)
+                classes_str = ", ".join(instantiated[:MAX_CLASSES_TO_DISPLAY])
+                if len(instantiated) > MAX_CLASSES_TO_DISPLAY:
+                    remaining = len(instantiated) - MAX_CLASSES_TO_DISPLAY
+                    classes_str += f", ... ({remaining} more)"
                 return (
-                    f"{relative}:{node.lineno} class {node.name} instantiates {count} dependencies "
+                    f"{rel_path}:{node.lineno} class {node.name} instantiates {count} dependencies "
                     f"(limit {max_inst}) - [{classes_str}]"
                 )
         return None
 
     def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
         """Scan a file for dependency instantiation violations."""
-        source = path.read_text()
-        try:
-            tree = ast.parse(source, filename=str(path))
-        except SyntaxError as exc:
-            raise RuntimeError(
-                f"failed to parse Python source: {path} ({exc})"
-            ) from exc
+        tree = parse_python_ast(path)
+        assert tree is not None  # parse_python_ast raises on error by default
         violations: List[str] = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                if violation := self._check_class_init(
-                    node, path, args.max_instantiations
-                ):
-                    violations.append(violation)
+        for node in iter_ast_nodes(tree, ast.ClassDef):
+            assert isinstance(node, ast.ClassDef)  # Type narrowing for pyright
+            if violation := self._check_class_init(node, path, args.max_instantiations):
+                violations.append(violation)
         return violations
 
     def get_violations_header(self, args: argparse.Namespace) -> str:
@@ -129,11 +127,5 @@ class DependencyGuard(GuardRunner):
         return "Tip: Pass dependencies via __init__ parameters instead of instantiating them internally"
 
 
-def main(argv: Optional[Iterable[str]] = None) -> int:
-    """Main entry point for dependency_guard."""
-    guard = DependencyGuard()
-    return guard.run(argv)
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(DependencyGuard.main())

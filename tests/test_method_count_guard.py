@@ -7,12 +7,9 @@ from unittest.mock import patch
 import pytest
 
 from ci_tools.scripts import method_count_guard
-from ci_tools.scripts.guard_common import is_excluded, iter_python_files
+from ci_tools.scripts.guard_common import is_excluded, iter_python_files, count_class_methods
 
-
-def write_module(path: Path, content: str) -> None:
-    """Helper to write Python module content."""
-    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_iter_python_files_single_file(tmp_path: Path):
@@ -66,7 +63,7 @@ def test_count_methods_basic():
 
     tree = method_count_guard.ast.parse(source)
     class_node = tree.body[0]
-    public_count, total_count = method_count_guard.count_methods(class_node)
+    public_count, total_count = count_class_methods(class_node)
 
     assert public_count == 2  # method1, method2
     assert total_count == 3  # method1, method2, _private_method
@@ -90,7 +87,7 @@ def test_count_methods_excludes_dunder():
 
     tree = method_count_guard.ast.parse(source)
     class_node = tree.body[0]
-    public_count, total_count = method_count_guard.count_methods(class_node)
+    public_count, total_count = count_class_methods(class_node)
 
     assert public_count == 1  # Only method
     assert total_count == 1
@@ -112,7 +109,7 @@ def test_count_methods_excludes_properties():
 
     tree = method_count_guard.ast.parse(source)
     class_node = tree.body[0]
-    public_count, total_count = method_count_guard.count_methods(class_node)
+    public_count, total_count = count_class_methods(class_node)
 
     assert public_count == 1  # Only method
     assert total_count == 1
@@ -136,7 +133,7 @@ def test_count_methods_private_methods():
 
     tree = method_count_guard.ast.parse(source)
     class_node = tree.body[0]
-    public_count, total_count = method_count_guard.count_methods(class_node)
+    public_count, total_count = count_class_methods(class_node)
 
     assert public_count == 1  # Only public_method
     assert total_count == 2  # public_method, _private_method (not __private_name_mangled)
@@ -154,7 +151,7 @@ def test_count_methods_no_methods():
 
     tree = method_count_guard.ast.parse(source)
     class_node = tree.body[0]
-    public_count, total_count = method_count_guard.count_methods(class_node)
+    public_count, total_count = count_class_methods(class_node)
 
     assert public_count == 0
     assert total_count == 0
@@ -177,7 +174,7 @@ def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = method_count_guard.main(
+        result = method_count_guard.MethodCountGuard.main(
             ["--root", str(root), "--max-public-methods", "5", "--max-total-methods", "10"]
         )
 
@@ -197,7 +194,7 @@ def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
     py_file.write_text(content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = method_count_guard.main(
+        result = method_count_guard.MethodCountGuard.main(
             ["--root", str(root), "--max-public-methods", "5", "--max-total-methods", "10"]
         )
 
@@ -221,7 +218,7 @@ def test_main_respects_exclusions(tmp_path: Path, capsys: pytest.CaptureFixture)
     (excluded / "excluded.py").write_text(many_methods)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = method_count_guard.main(
+        result = method_count_guard.MethodCountGuard.main(
             [
                 "--root",
                 str(root),
@@ -252,7 +249,7 @@ def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFix
     (root / "alpha.py").write_text(many_methods)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = method_count_guard.main(
+        result = method_count_guard.MethodCountGuard.main(
             ["--root", str(root), "--max-public-methods", "5", "--max-total-methods", "10"]
         )
 
@@ -268,7 +265,7 @@ def test_main_traverse_error(tmp_path: Path, capsys: pytest.CaptureFixture):
     """Test main function handles traversal errors."""
     missing = tmp_path / "missing"
 
-    result = method_count_guard.main(["--root", str(missing)])
+    result = method_count_guard.MethodCountGuard.main(["--root", str(missing)])
     assert result == 1
     captured = capsys.readouterr()
     assert "failed to traverse" in captured.err
@@ -281,7 +278,7 @@ def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture):
     (root / "bad.py").write_text("class Foo:\n    def method(self\n")
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = method_count_guard.main(["--root", str(root)])
+        result = method_count_guard.MethodCountGuard.main(["--root", str(root)])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -312,7 +309,7 @@ def test_count_methods_mixed_decorators():
 
     tree = method_count_guard.ast.parse(source)
     class_node = tree.body[0]
-    public_count, total_count = method_count_guard.count_methods(class_node)
+    public_count, total_count = count_class_methods(class_node)
 
     # Should count static, cls, and regular, but not prop1
     assert total_count == 3
@@ -329,7 +326,7 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     (root / "module.py").write_text(many_methods)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = method_count_guard.main(
+        result = method_count_guard.MethodCountGuard.main(
             ["--root", str(root), "--max-public-methods", "5", "--max-total-methods", "10"]
         )
 
@@ -356,7 +353,7 @@ def test_count_methods_only_dunder():
 
     tree = method_count_guard.ast.parse(source)
     class_node = tree.body[0]
-    public_count, total_count = method_count_guard.count_methods(class_node)
+    public_count, total_count = count_class_methods(class_node)
 
     assert public_count == 0
     assert total_count == 0

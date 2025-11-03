@@ -7,12 +7,9 @@ from unittest.mock import patch
 import pytest
 
 from ci_tools.scripts import structure_guard
-from ci_tools.scripts.guard_common import is_excluded, iter_python_files
+from ci_tools.scripts.guard_common import is_excluded, iter_python_files, get_class_line_span
 
-
-def write_module(path: Path, content: str) -> None:
-    """Helper to write Python module content."""
-    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_iter_python_files_single_file(tmp_path: Path):
@@ -71,7 +68,7 @@ def test_class_line_span_basic(tmp_path: Path):
 
     tree = structure_guard.ast.parse(source)
     class_node = tree.body[0]
-    start, end = structure_guard.class_line_span(class_node)
+    start, end = get_class_line_span(class_node)
 
     assert start == 1
     assert end == 3
@@ -87,7 +84,7 @@ def test_class_line_span_no_end_lineno(tmp_path: Path):
     if hasattr(class_node, "end_lineno"):
         delattr(class_node, "end_lineno")
 
-    start, end = structure_guard.class_line_span(class_node)
+    start, end = get_class_line_span(class_node)
     assert start == 1
     assert end >= start
 
@@ -109,7 +106,7 @@ def test_class_line_span_nested_content(tmp_path: Path):
 
     tree = structure_guard.ast.parse(source)
     class_node = tree.body[0]
-    start, end = structure_guard.class_line_span(class_node)
+    start, end = get_class_line_span(class_node)
 
     assert start == 1
     assert end == 8
@@ -129,7 +126,7 @@ def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.main(["--root", str(root), "--max-class-lines", "10"])
+        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
 
     assert result == 0
     captured = capsys.readouterr()
@@ -147,7 +144,7 @@ def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
     py_file.write_text(content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.main(["--root", str(root), "--max-class-lines", "10"])
+        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -169,7 +166,7 @@ def test_main_respects_exclusions(tmp_path: Path, capsys: pytest.CaptureFixture)
     (excluded / "excluded.py").write_text(large_class)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.main(
+        result = structure_guard.StructureGuard.main(
             ["--root", str(root), "--max-class-lines", "10", "--exclude", str(excluded)]
         )
 
@@ -191,7 +188,7 @@ def test_main_handles_multiple_violations(tmp_path: Path, capsys: pytest.Capture
     (root / "file2.py").write_text(large_class)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.main(["--root", str(root), "--max-class-lines", "10"])
+        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -211,7 +208,7 @@ def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFix
     (root / "alpha.py").write_text(large_class)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.main(["--root", str(root), "--max-class-lines", "10"])
+        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -235,7 +232,7 @@ def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture, mon
     monkeypatch.setattr(structure_guard.StructureGuard, "scan_file", mock_scan_file)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.main(["--root", str(root)])
+        result = structure_guard.StructureGuard.main(["--root", str(root)])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -247,7 +244,7 @@ def test_class_line_span_single_line_class():
     source = "class Foo: pass"
     tree = structure_guard.ast.parse(source)
     class_node = tree.body[0]
-    start, end = structure_guard.class_line_span(class_node)
+    start, end = get_class_line_span(class_node)
 
     assert start == 1
     assert end == 1
@@ -264,7 +261,7 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     (root / "module.py").write_text(large_class)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.main(["--root", str(root), "--max-class-lines", "10"])
+        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()

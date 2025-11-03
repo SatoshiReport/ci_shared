@@ -1,4 +1,17 @@
-"""Compatibility layer re-exporting the CI runtime helpers."""
+"""Compatibility layer re-exporting the CI runtime helpers.
+
+This module provides backward compatibility by re-exporting all public symbols
+from ci_runtime. This allows consumers to import from either:
+    - ci_tools.ci (stable legacy API surface)
+    - ci_tools.ci_runtime (current canonical location)
+
+The ci_runtime package is the canonical source of implementation. This file exists
+solely to maintain import compatibility for existing consumers (Zeus, Kalshi).
+
+Usage:
+    from ci_tools.ci import main, configure_runtime  # Legacy compatible
+    from ci_tools.ci_runtime import main, configure_runtime  # Canonical
+"""
 
 from __future__ import annotations
 

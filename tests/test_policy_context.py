@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from ci_tools.scripts.guard_common import parse_python_ast, relative_path
+from ci_tools.scripts.policy_collectors_ast import _resolve_default_argument
 from ci_tools.scripts.policy_context import (
     BANNED_KEYWORDS,
     BROAD_EXCEPT_SUPPRESSION,
@@ -26,7 +28,6 @@ from ci_tools.scripts.policy_context import (
     FunctionEntry,
     FunctionNormalizer,
     ModuleContext,
-    _resolve_default_argument,
     classify_handler,
     get_call_qualname,
     handler_contains_suppression,
@@ -37,8 +38,6 @@ from ci_tools.scripts.policy_context import (
     iter_module_contexts,
     iter_python_files,
     normalize_function,
-    normalize_path,
-    parse_ast,
 )
 
 
@@ -176,9 +175,9 @@ def test_normalize_function_async():
 
 
 def test_normalize_path(tmp_path, monkeypatch):
-    """Test normalize_path converts to relative path."""
+    """Test relative_path converts to relative path."""
     test_file = tmp_path / "subdir" / "file.py"
-    result = normalize_path(test_file, tmp_path)
+    result = relative_path(test_file, tmp_path, as_string=True)
     assert result == "subdir/file.py"
 
 
@@ -214,18 +213,18 @@ def test_iter_python_files_handles_nonexistent_path(tmp_path):
 
 
 def test_parse_ast_valid_syntax(tmp_path):
-    """Test parse_ast with valid Python syntax."""
+    """Test parse_python_ast with valid Python syntax."""
     test_file = tmp_path / "valid.py"
     test_file.write_text("x = 1\ny = 2")
-    result = parse_ast(test_file)
+    result = parse_python_ast(test_file, raise_on_error=False)
     assert isinstance(result, ast.Module)
 
 
 def test_parse_ast_invalid_syntax(tmp_path):
-    """Test parse_ast with invalid Python syntax."""
+    """Test parse_python_ast with invalid Python syntax."""
     test_file = tmp_path / "invalid.py"
     test_file.write_text("def foo(\n  syntax error")
-    result = parse_ast(test_file)
+    result = parse_python_ast(test_file, raise_on_error=False)
     assert result is None
 
 

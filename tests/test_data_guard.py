@@ -9,11 +9,9 @@ from unittest.mock import patch
 import pytest
 
 from ci_tools.scripts import data_guard
+from ci_tools.scripts.guard_common import parse_python_ast, relative_path
 
-
-def write_module(path: Path, source: str) -> None:
-    """Helper to write a Python module with proper formatting."""
-    path.write_text(textwrap.dedent(source).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def write_allowlist(path: Path, content: dict) -> None:
@@ -91,7 +89,7 @@ class TestASTUtilities:
         target = tmp_path / "valid.py"
         write_module(target, "def foo(): pass")
 
-        tree = data_guard.parse_ast(target)
+        tree = parse_python_ast(target, raise_on_error=False)
         assert tree is not None
         assert isinstance(tree, ast.Module)
 
@@ -100,7 +98,7 @@ class TestASTUtilities:
         target = tmp_path / "invalid.py"
         target.write_text("def foo(")
 
-        tree = data_guard.parse_ast(target)
+        tree = parse_python_ast(target, raise_on_error=False)
         assert tree is None
 
     def test_extract_target_names_simple(self) -> None:
@@ -435,7 +433,7 @@ class TestIterators:
     def test_normalize_path(self, tmp_path: Path) -> None:
         """Test path normalization."""
         path = tmp_path / "src" / "module.py"
-        normalized = data_guard.normalize_path(path, tmp_path)
+        normalized = relative_path(path, tmp_path, as_string=True)
         assert normalized == "src/module.py"
 
 

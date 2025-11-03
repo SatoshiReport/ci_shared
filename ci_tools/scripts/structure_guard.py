@@ -6,24 +6,14 @@ import argparse
 import ast
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import List
 
 from ci_tools.scripts.guard_common import (
     GuardRunner,
-    make_relative_path,
+    get_class_line_span,
+    parse_python_ast,
+    relative_path,
 )
-
-
-def class_line_span(node: ast.ClassDef) -> Tuple[int, int]:
-    start = getattr(node, "lineno", 0)
-    end = getattr(node, "end_lineno", None)
-    if end is None:
-        end = start
-        for inner in ast.walk(node):
-            inner_end = getattr(inner, "end_lineno", None)
-            if inner_end is not None and inner_end > end:
-                end = inner_end
-    return start, end
 
 
 class StructureGuard(GuardRunner):
@@ -47,23 +37,18 @@ class StructureGuard(GuardRunner):
 
     def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
         """Scan a file for class size violations."""
-        source = path.read_text()
-        try:
-            tree = ast.parse(source, filename=str(path))
-        except SyntaxError as exc:
-            raise RuntimeError(
-                f"failed to parse Python source: {path} ({exc})"
-            ) from exc
-
+        tree = parse_python_ast(path)
+        assert tree is not None  # parse_python_ast raises on error by default
+        assert isinstance(tree, ast.Module)  # Type narrowing for tree.body access
         violations: List[str] = []
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
-                start, end = class_line_span(node)
+                start, end = get_class_line_span(node)
                 length = end - start + 1
                 if length > args.max_class_lines:
-                    relative = make_relative_path(path, self.repo_root)
+                    rel_path = relative_path(path, self.repo_root)
                     violations.append(
-                        f"{relative}:{start} class {node.name} spans {length} lines "
+                        f"{rel_path}:{start} class {node.name} spans {length} lines "
                         f"(limit {args.max_class_lines})"
                     )
         return violations
@@ -76,11 +61,5 @@ class StructureGuard(GuardRunner):
         )
 
 
-def main(argv: Optional[Iterable[str]] = None) -> int:
-    """Main entry point for structure_guard."""
-    guard = StructureGuard()
-    return guard.run(argv)
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(StructureGuard.main())

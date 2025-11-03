@@ -10,17 +10,21 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeGuard
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple, TypeGuard
 
+from ci_tools.scripts.guard_common import (
+    iter_ast_nodes,
+    iter_python_files,
+    parse_python_ast,
+    relative_path,
+)
 from ci_tools.scripts.policy_context import (
+    ROOT,
+    SCAN_DIRECTORIES,
     contains_literal_dataset,
     get_call_qualname,
-    normalize_path,
-    parse_ast,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
-SCAN_DIRECTORIES: Sequence[Path] = (ROOT / "src", ROOT / "tests")
 ALLOWLIST_PATH = ROOT / "config" / "data_guard_allowlist.json"
 
 SENSITIVE_NAME_TOKENS: Tuple[str, ...] = (
@@ -97,13 +101,6 @@ class Violation:
     path: Path
     lineno: int
     message: str
-
-
-def iter_python_files(bases: Sequence[Path]) -> Iterator[Path]:
-    for base in bases:
-        if not base.exists():
-            continue
-        yield from base.rglob("*.py")
 
 
 def extract_target_names(target: ast.AST) -> Iterable[str]:
@@ -214,20 +211,27 @@ def _assignment_violation_from_node(path: Path, node: ast.AST) -> Optional[Viola
 def _iter_sensitive_assignment_violations(
     path: Path, tree: ast.AST
 ) -> Iterator[Violation]:
-    for node in ast.walk(tree):
+    for node in iter_ast_nodes(tree, (ast.Assign, ast.AnnAssign)):
         violation = _assignment_violation_from_node(path, node)
         if violation:
             yield violation
 
 
-def collect_sensitive_assignments() -> List[Violation]:
+def _collect_violations_from_iterator(
+    iterator_func: Callable[[Path, ast.AST], Iterator[Violation]],
+) -> List[Violation]:
+    """Generic collector that applies an iterator function to all Python files."""
     violations: List[Violation] = []
     for path in iter_python_files(SCAN_DIRECTORIES):
-        tree = parse_ast(path)
+        tree = parse_python_ast(path, raise_on_error=False)
         if tree is None:
             continue
-        violations.extend(_iter_sensitive_assignment_violations(path, tree))
+        violations.extend(iterator_func(path, tree))
     return violations
+
+
+def collect_sensitive_assignments() -> List[Violation]:
+    return _collect_violations_from_iterator(_iter_sensitive_assignment_violations)
 
 
 def _call_contains_literal_arguments(node: ast.Call) -> bool:
@@ -238,9 +242,8 @@ def _call_contains_literal_arguments(node: ast.Call) -> bool:
 def _iter_dataframe_literal_violations(
     path: Path, tree: ast.AST
 ) -> Iterator[Violation]:
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
+    for node in iter_ast_nodes(tree, ast.Call):
+        assert isinstance(node, ast.Call)  # Type narrowing for pyright
         qualname = get_call_qualname(node.func)
         if not qualname or qualname not in DATAFRAME_CALLS:
             continue
@@ -255,13 +258,7 @@ def _iter_dataframe_literal_violations(
 
 
 def collect_dataframe_literals() -> List[Violation]:
-    violations: List[Violation] = []
-    for path in iter_python_files(SCAN_DIRECTORIES):
-        tree = parse_ast(path)
-        if tree is None:
-            continue
-        violations.extend(_iter_dataframe_literal_violations(path, tree))
-    return violations
+    return _collect_violations_from_iterator(_iter_dataframe_literal_violations)
 
 
 def _literal_comparators(node: ast.Compare) -> list[ast.Constant]:
@@ -293,9 +290,8 @@ def _format_comparison_message(
 def _iter_numeric_comparison_violations(
     path: Path, tree: ast.AST
 ) -> Iterator[Violation]:
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Compare):
-            continue
+    for node in iter_ast_nodes(tree, ast.Compare):
+        assert isinstance(node, ast.Compare)  # Type narrowing for pyright
         comparator_literals = _literal_comparators(node)
         if not comparator_literals:
             continue
@@ -312,13 +308,7 @@ def _iter_numeric_comparison_violations(
 
 
 def collect_numeric_comparisons() -> List[Violation]:
-    violations: List[Violation] = []
-    for path in iter_python_files(SCAN_DIRECTORIES):
-        tree = parse_ast(path)
-        if tree is None:
-            continue
-        violations.extend(_iter_numeric_comparison_violations(path, tree))
-    return violations
+    return _collect_violations_from_iterator(_iter_numeric_comparison_violations)
 
 
 def collect_all_violations() -> List[Violation]:
@@ -332,11 +322,16 @@ def collect_all_violations() -> List[Violation]:
 def main() -> int:
     violations = sorted(
         collect_all_violations(),
-        key=lambda item: (normalize_path(item.path), item.lineno, item.message),
+        key=lambda item: (
+            relative_path(item.path, as_string=True),
+            item.lineno,
+            item.message,
+        ),
     )
     if violations:
         details = "\n".join(
-            f"{normalize_path(v.path)}:{v.lineno} -> {v.message}" for v in violations
+            f"{relative_path(v.path, as_string=True)}:{v.lineno} -> {v.message}"
+            for v in violations
         )
         raise DataGuardViolation("Data integrity violations detected:\n" + details)
     return 0

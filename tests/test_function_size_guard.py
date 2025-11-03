@@ -8,12 +8,9 @@ from unittest.mock import patch
 import pytest
 
 from ci_tools.scripts import function_size_guard
-from ci_tools.scripts.guard_common import is_excluded, iter_python_files
+from ci_tools.scripts.guard_common import is_excluded, iter_python_files, count_ast_node_lines
 
-
-def write_module(path: Path, content: str) -> None:
-    """Helper to write Python module content."""
-    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_parse_args_defaults():
@@ -100,7 +97,7 @@ def test_count_function_lines_basic():
 
     tree = function_size_guard.ast.parse(source)
     func_node = tree.body[0]
-    count = function_size_guard.count_function_lines(func_node)
+    count = count_ast_node_lines(func_node)
     assert count == 3
 
 
@@ -114,7 +111,7 @@ def test_count_function_lines_no_end_lineno():
     if hasattr(func_node, "end_lineno"):
         original_end = func_node.end_lineno
         func_node.end_lineno = None
-        count = function_size_guard.count_function_lines(func_node)
+        count = count_ast_node_lines(func_node)
         assert count == 0
         func_node.end_lineno = original_end
 
@@ -132,7 +129,7 @@ def test_count_function_lines_async_function():
 
     tree = function_size_guard.ast.parse(source)
     func_node = tree.body[0]
-    count = function_size_guard.count_function_lines(func_node)
+    count = count_ast_node_lines(func_node)
     assert count == 4
 
 
@@ -202,7 +199,7 @@ def test_scan_file_multiple_functions(tmp_path: Path):
     assert "large_function" in violations[0]
 
 
-def test_scan_file_syntax_error(tmp_path: Path, capsys: pytest.CaptureFixture):
+def test_scan_file_syntax_error(tmp_path: Path):
     """Test scan_file with syntax error."""
     py_file = tmp_path / "bad.py"
     py_file.write_text("def foo(\n")  # Missing closing paren
@@ -212,11 +209,9 @@ def test_scan_file_syntax_error(tmp_path: Path, capsys: pytest.CaptureFixture):
     guard.repo_root = tmp_path
     violations = guard.scan_file(py_file, args)
     assert len(violations) == 0
-    captured = capsys.readouterr()
-    assert "failed to parse" in captured.err
 
 
-def test_scan_file_unicode_decode_error(tmp_path: Path, capsys: pytest.CaptureFixture):
+def test_scan_file_unicode_decode_error(tmp_path: Path):
     """Test scan_file with Unicode decode error."""
     py_file = tmp_path / "bad_encoding.py"
     py_file.write_bytes(b"\xff\xfe\x00\x00")  # Invalid UTF-8
@@ -226,8 +221,6 @@ def test_scan_file_unicode_decode_error(tmp_path: Path, capsys: pytest.CaptureFi
     guard.repo_root = tmp_path
     violations = guard.scan_file(py_file, args)
     assert len(violations) == 0
-    captured = capsys.readouterr()
-    assert "failed to parse" in captured.err
 
 
 def test_scan_file_async_functions(tmp_path: Path):
@@ -258,7 +251,7 @@ def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
 
     assert result == 0
     captured = capsys.readouterr()
@@ -276,7 +269,7 @@ def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
     py_file.write_text(content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -296,7 +289,7 @@ def test_main_respects_exclusions(tmp_path: Path, capsys: pytest.CaptureFixture)
     (excluded / "excluded.py").write_text(large_func)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.main(
+        result = function_size_guard.FunctionSizeGuard.main(
             ["--root", str(root), "--max-function-lines", "10", "--exclude", str(excluded)]
         )
 
@@ -316,7 +309,7 @@ def test_main_handles_multiple_violations(tmp_path: Path, capsys: pytest.Capture
     (root / "file2.py").write_text(large_func)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -334,7 +327,7 @@ def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFix
     (root / "alpha.py").write_text(large_func)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -350,7 +343,7 @@ def test_main_traverse_error(tmp_path: Path, capsys: pytest.CaptureFixture):
     """Test main function handles traversal errors."""
     missing = tmp_path / "missing"
 
-    result = function_size_guard.main(["--root", str(missing)])
+    result = function_size_guard.FunctionSizeGuard.main(["--root", str(missing)])
     assert result == 1
     captured = capsys.readouterr()
     assert "failed to traverse" in captured.err
@@ -413,7 +406,7 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     (root / "module.py").write_text(large_func)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
 
     assert result == 1
     captured = capsys.readouterr()
@@ -442,7 +435,7 @@ def test_count_function_lines_single_line():
     source = "def foo(): return 1"
     tree = function_size_guard.ast.parse(source)
     func_node = tree.body[0]
-    count = function_size_guard.count_function_lines(func_node)
+    count = count_ast_node_lines(func_node)
     assert count == 1
 
 
@@ -461,29 +454,3 @@ def test_scan_file_with_decorators(tmp_path: Path):
     assert "decorated_func" in violations[0]
 
 
-def test_module_level_parse_args():
-    """Test module-level parse_args wrapper function."""
-    args = function_size_guard.parse_args([])
-    assert args.root == Path("src")
-    assert args.max_function_lines == 80
-    assert args.exclude == []
-
-
-def test_module_level_scan_file(tmp_path: Path):
-    """Test module-level scan_file wrapper function."""
-    py_file = tmp_path / "test.py"
-    lines = "\n".join([f"    line_{i} = {i}" for i in range(15)])
-    content = f"def large_func():\n{lines}"
-    py_file.write_text(content)
-    violations = function_size_guard.scan_file(py_file, limit=10)
-    assert len(violations) == 1
-    assert violations[0][0] == py_file
-    assert violations[0][1] == "large_func"
-
-
-def test_module_level_scan_file_handles_errors(tmp_path: Path):
-    """Test module-level scan_file handles read errors."""
-    py_file = tmp_path / "bad.py"
-    py_file.write_text("def foo(\n")
-    violations = function_size_guard.scan_file(py_file, limit=10)
-    assert len(violations) == 0

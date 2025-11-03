@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 import re
-import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
+
+from ci_tools.scripts.guard_common import detect_repo_root
 
 CONFIG_CANDIDATES = ("ci_shared.config.json", ".ci_shared.config.json")
 DEFAULT_PROTECTED_PATH_PREFIXES: tuple[str, ...] = (
@@ -24,25 +26,6 @@ RISKY_PATTERNS = (
 REQUIRED_MODEL = "gpt-5-codex"
 REASONING_EFFORT_CHOICES: tuple[str, ...] = ("low", "medium", "high")
 DEFAULT_REASONING_EFFORT = "high"
-
-
-def detect_repo_root() -> Path:
-    """Best-effort detection of the repository root."""
-
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        candidate = Path(result.stdout.strip())
-        if candidate.exists():
-            return candidate
-    except (subprocess.CalledProcessError, FileNotFoundError):  # pragma: no cover
-        pass
-    return Path.cwd()
 
 
 def load_repo_config(repo_root: Path) -> dict[str, Any]:
@@ -93,6 +76,63 @@ def _coerce_coverage_threshold(config: dict[str, Any], initial: float) -> float:
     return initial
 
 
+def resolve_model_choice(
+    model_arg: Optional[str] = None, *, validate: bool = True
+) -> str:
+    """Resolve the Codex model to use.
+
+    Args:
+        model_arg: Model specified via CLI argument
+        validate: If True, raise exception if model doesn't match REQUIRED_MODEL
+
+    Returns:
+        Resolved model name
+
+    Raises:
+        ValueError: If validate=True and model doesn't match REQUIRED_MODEL
+    """
+    from ci_tools.ci_runtime.models import ModelSelectionAbort
+
+    candidate = model_arg or os.environ.get("OPENAI_MODEL") or REQUIRED_MODEL
+    if validate and candidate != REQUIRED_MODEL:
+        raise ModelSelectionAbort.unsupported_model(
+            received=candidate, required=REQUIRED_MODEL
+        )
+    os.environ["OPENAI_MODEL"] = candidate
+    return candidate
+
+
+def resolve_reasoning_choice(
+    reasoning_arg: Optional[str] = None, *, validate: bool = True
+) -> str:
+    """Resolve the reasoning effort level to use.
+
+    Args:
+        reasoning_arg: Reasoning effort specified via CLI argument
+        validate: If True, raise exception if choice is not valid
+
+    Returns:
+        Resolved reasoning effort (low/medium/high)
+
+    Raises:
+        ValueError: If validate=True and choice is not in REASONING_EFFORT_CHOICES
+    """
+    from ci_tools.ci_runtime.models import ReasoningEffortAbort
+
+    env_reasoning = os.environ.get("OPENAI_REASONING_EFFORT")
+    candidate = (
+        reasoning_arg
+        or (env_reasoning.lower() if env_reasoning else None)
+        or DEFAULT_REASONING_EFFORT
+    )
+    if validate and candidate not in REASONING_EFFORT_CHOICES:
+        raise ReasoningEffortAbort.unsupported_choice(
+            received=candidate, allowed=REASONING_EFFORT_CHOICES
+        )
+    os.environ["OPENAI_REASONING_EFFORT"] = candidate
+    return candidate
+
+
 REPO_ROOT = detect_repo_root()
 REPO_CONFIG = load_repo_config(REPO_ROOT)
 DEFAULT_REPO_CONTEXT = (
@@ -122,6 +162,8 @@ __all__ = [
     "DEFAULT_REASONING_EFFORT",
     "detect_repo_root",
     "load_repo_config",
+    "resolve_model_choice",
+    "resolve_reasoning_choice",
     "REPO_ROOT",
     "REPO_CONFIG",
     "REPO_CONTEXT",

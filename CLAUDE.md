@@ -109,6 +109,7 @@ The toolkit includes specialized guard scripts that enforce code quality policie
 - **`data_guard.py`**: Validates data handling patterns
 - **`documentation_guard.py`**: Ensures documentation standards
 - **`complexity_guard.py`**: Enforces cyclomatic and cognitive complexity limits
+- **`tool_config_guard.py`**: Validates tool configurations match shared standard across repositories
 
 **Security Guards:**
 - **`gitleaks`**: Scans for hardcoded secrets (API keys, tokens, passwords) - external Go binary
@@ -116,6 +117,8 @@ The toolkit includes specialized guard scripts that enforce code quality policie
 - **`safety`**: Dependency vulnerability scanner (checks PyPI against CVE database)
 
 ### Configuration
+
+**Repository-Specific Configuration**
 
 Repository-specific configuration is supplied via `ci_shared.config.json` at the repository root:
 
@@ -126,6 +129,31 @@ Repository-specific configuration is supplied via `ci_shared.config.json` at the
   "coverage_threshold": 80.0
 }
 ```
+
+**Shared Tool Configuration**
+
+To ensure consistent CI behavior across all repositories (zeus, kalshi, aws, ci_shared), tool configurations (ruff, bandit, pytest, coverage, etc.) are standardized in `shared-tool-config.toml`.
+
+**For consuming repositories (zeus, kalshi, aws):**
+
+1. **Initial setup**: Copy tool configurations from `shared-tool-config.toml` to your repository's `pyproject.toml`
+   ```bash
+   # From your repository root
+   python -m ci_tools.scripts.tool_config_guard --sync
+   ```
+
+2. **Validation**: Check if your tool configs match the shared standard
+   ```bash
+   python -m ci_tools.scripts.tool_config_guard
+   ```
+
+3. **Keep in sync**: When `shared-tool-config.toml` is updated, run the sync command again
+
+**Important notes:**
+- Only `[tool.*]` sections are standardized (ruff, bandit, pytest, coverage, deptry)
+- Project metadata (`[project]`, `[build-system]`) remains repository-specific
+- Dependencies remain repository-specific
+- The guard validates consistency but requires manual copying to avoid file corruption risks
 
 ### Vendored Dependencies
 
@@ -187,3 +215,52 @@ When working on this codebase:
 3. Protected paths must never be modified by automated patches
 4. All guard scripts follow a similar CLI pattern: `--root`, exclusions, thresholds
 5. Python 3.10+ required (uses `is_relative_to` and other modern APIs)
+
+## Auto-Propagation of Updates
+
+When you successfully run CI and push changes from the ci_shared repository, the updates are **automatically propagated** to all consuming repositories (zeus, kalshi, aws).
+
+### How It Works
+
+After `scripts/ci.sh` successfully pushes ci_shared changes:
+
+1. **`propagate_ci_shared.py`** automatically runs
+2. For each consuming repo (zeus, kalshi, aws):
+   - Updates the ci_shared submodule to the latest commit
+   - Creates a commit: "Update ci_shared submodule"
+   - Pushes the change to the remote
+
+### What Gets Auto-Updated
+
+- ✅ `ci_shared.mk` - CI pipeline logic
+- ✅ All guard scripts (`ci_tools/scripts/*.py`)
+- ✅ CI runner (`ci_tools/scripts/ci.sh`)
+- ✅ Shared tool config (`shared-tool-config.toml`)
+- ✅ All other ci_shared files
+
+### What Stays Repo-Specific
+
+Each consuming repo maintains its own:
+- `pyproject.toml` - Synced via `tool_config_guard.py`, but separate files
+- `Makefile` - Repo-specific variables
+- `ci_shared.config.json` - Repo-specific settings
+
+### Manual Propagation
+
+If auto-propagation fails or you need to update manually:
+
+```bash
+# From any consuming repo (zeus, kalshi, aws)
+cd ../zeus  # or kalshi, or aws
+git submodule update --remote ci_shared
+git add ci_shared
+git commit -m "Update ci_shared submodule"
+git push
+```
+
+### Skipping Auto-Propagation
+
+Auto-propagation is skipped if:
+- A consuming repo has uncommitted changes
+- The submodule is already up to date
+- The consuming repo is not found

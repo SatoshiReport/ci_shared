@@ -10,6 +10,9 @@ from .codex import risky_pattern_in_diff, truncate_diff_summary
 from .config import PROTECTED_PATH_PREFIXES
 from .models import PatchApplyError
 
+# Diff header format: diff --git a/path b/path
+MIN_DIFF_HEADER_PARTS = 4
+
 
 def _extract_diff_paths(patch_text: str) -> set[str]:
     """Return protected file paths touched by the diff headers."""
@@ -18,7 +21,7 @@ def _extract_diff_paths(patch_text: str) -> set[str]:
         if not line.startswith("diff --git"):
             continue
         parts = line.split()
-        if len(parts) < 4:
+        if len(parts) < MIN_DIFF_HEADER_PARTS:
             continue
         candidates = (parts[2][2:], parts[3][2:])
         for candidate in candidates:

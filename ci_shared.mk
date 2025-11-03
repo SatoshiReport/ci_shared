@@ -3,12 +3,15 @@
 # This file contains the common CI pipeline checks used by both repositories.
 # Include this in your Makefile with: include ci_shared.mk
 
+# Dynamically locate ci_tools config from installed package
+CI_TOOLS_CONFIG_PATH := $(shell $(PYTHON) -c "import ci_tools; from pathlib import Path; print((Path(ci_tools.__file__).parent / 'config').as_posix())" 2>/dev/null || echo "ci_shared/ci_tools/config")
+
 # Shared variables (can be overridden in individual Makefiles)
 FORMAT_TARGETS ?= src tests
 SHARED_SOURCE_ROOT ?= src
 SHARED_TEST_ROOT ?= tests
 SHARED_DOC_ROOT ?= .
-SHARED_CODESPELL_IGNORE ?= ci_shared/config/codespell_ignore_words.txt
+SHARED_CODESPELL_IGNORE ?= $(CI_TOOLS_CONFIG_PATH)/codespell_ignore_words.txt
 SHARED_PYRIGHT_TARGETS ?= $(SHARED_SOURCE_ROOT)
 SHARED_PYLINT_TARGETS ?= $(SHARED_SOURCE_ROOT)
 SHARED_PYTEST_TARGET ?= $(SHARED_TEST_ROOT)

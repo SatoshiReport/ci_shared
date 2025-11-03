@@ -9,9 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 import complexity_guard
 
-
-def write_module(path: Path, source: str) -> None:
-    path.write_text(textwrap.dedent(source).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_calculate_cognitive_complexity_counts_nested_branches() -> None:

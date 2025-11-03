@@ -19,7 +19,13 @@ import argparse
 import ast
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
+
+from ci_tools.scripts.guard_common import (
+    iter_ast_nodes,
+    iter_python_files,
+    parse_python_ast,
+)
 
 
 class ImportCollector(ast.NodeVisitor):
@@ -106,19 +112,14 @@ def collect_all_imports(root: Path) -> Set[str]:
     """
     all_imports: Set[str] = set()
 
-    for py_file in root.rglob("*.py"):
-        if "__pycache__" in str(py_file):
+    for py_file in iter_python_files(root):
+        tree = parse_python_ast(py_file, raise_on_error=False)
+        if tree is None:
             continue
 
-        try:
-            with open(py_file, "r", encoding="utf-8") as f:
-                tree = ast.parse(f.read(), filename=str(py_file))
-            collector = ImportCollector(file_path=py_file, root=root)
-            collector.visit(tree)
-            all_imports.update(collector.imports)
-        except (SyntaxError, UnicodeDecodeError):
-            # Skip files with syntax errors or encoding issues
-            pass
+        collector = ImportCollector(file_path=py_file, root=root)
+        collector.visit(tree)
+        all_imports.update(collector.imports)
 
     return all_imports
 
@@ -161,20 +162,19 @@ SUSPICIOUS_PATTERNS: Tuple[str, ...] = (
     "_2",
 )
 
-FALSE_POSITIVE_RULES: Tuple[Tuple[str, Iterable[str]], ...] = (
-    ("_temp", ("temperature", "max_temp")),
-    ("_2", ("phase_2", "_v2")),
-)
+FALSE_POSITIVE_RULES: Dict[str, Tuple[str, ...]] = {
+    "_temp": ("temperature", "max_temp"),
+    "_2": ("phase_2", "_v2"),
+}
 
 
 def _is_false_positive_for_pattern(stem: str, pattern: str) -> bool:
     """Check if a stem matches false positive rules for a specific pattern."""
-    for fp_pattern, exclusions in FALSE_POSITIVE_RULES:
-        if fp_pattern == pattern:
-            # Check if any exclusion marker is in the stem
-            for marker in exclusions:
-                if marker in stem:
-                    return True
+    if pattern in FALSE_POSITIVE_RULES:
+        # Check if any exclusion marker is in the stem
+        for marker in FALSE_POSITIVE_RULES[pattern]:
+            if marker in stem:
+                return True
     return False
 
 
@@ -200,10 +200,7 @@ def find_suspicious_duplicates(root: Path) -> List[Tuple[Path, str]]:
     """
     duplicates: List[Tuple[Path, str]] = []
 
-    for py_file in root.rglob("*.py"):
-        if "__pycache__" in str(py_file):
-            continue
-
+    for py_file in iter_python_files(root):
         reason = _duplicate_reason(py_file.stem)
         if reason:
             duplicates.append((py_file, reason))
@@ -226,26 +223,33 @@ def _is_cli_entry_point(py_file: Path) -> bool:
     CLI entry points are meant to be executed directly (e.g., python -m module)
     rather than imported, so they don't need to appear in import statements.
     """
-    try:
-        with open(py_file, "r", encoding="utf-8") as f:
-            content = f.read()
-            tree = ast.parse(content, filename=str(py_file))
-
-        # Check for if __name__ == "__main__": pattern
-        has_main_guard = 'if __name__ == "__main__"' in content
-
-        # Check for main() function definition
-        has_main_function = any(
-            isinstance(node, ast.FunctionDef) and node.name == "main"
-            for node in ast.walk(tree)
-        )
-
-        return has_main_guard and has_main_function
-    except (SyntaxError, UnicodeDecodeError, FileNotFoundError, OSError):
+    tree = parse_python_ast(py_file, raise_on_error=False)
+    if tree is None:
         return False
+
+    # Check for main() function definition
+    has_main_function = any(
+        isinstance(node, ast.FunctionDef) and node.name == "main"
+        for node in iter_ast_nodes(tree, ast.FunctionDef)
+    )
+
+    # Check for if __name__ == "__main__": pattern in AST
+    has_main_guard = any(
+        isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and isinstance(node.test.left, ast.Name)
+        and node.test.left.id == "__name__"
+        and len(node.test.comparators) == 1
+        and isinstance(node.test.comparators[0], ast.Constant)
+        and node.test.comparators[0].value == "__main__"
+        for node in iter_ast_nodes(tree, ast.If)
+    )
+
+    return has_main_guard and has_main_function
 
 
 def _should_skip_file(py_file: Path, exclude_patterns: List[str]) -> bool:
+    # Defense in depth: skip __pycache__ even though iter_python_files filters it
     if "__pycache__" in str(py_file):
         return True
     if any(pattern in str(py_file) for pattern in exclude_patterns):
@@ -341,7 +345,7 @@ def find_unused_modules(
     all_imports = _collect_all_imports_with_parent(root)
     unused: List[Tuple[Path, str]] = []
 
-    for py_file in root.rglob("*.py"):
+    for py_file in iter_python_files(root):
         if _should_skip_file(py_file, exclude_patterns):
             continue
 

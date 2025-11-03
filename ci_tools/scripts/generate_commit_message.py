@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
 from ci_tools.ci import gather_git_diff, request_commit_message
+from ci_tools.ci_runtime.config import resolve_model_choice, resolve_reasoning_choice
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -30,24 +30,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.set_defaults(model=None, reasoning=None, output=None)
     return parser.parse_args(argv)
-
-
-def _resolve_model_choice(args: argparse.Namespace) -> str:
-    return (
-        args.model
-        or os.environ.get("CI_COMMIT_MODEL")
-        or os.environ.get("OPENAI_MODEL")
-        or "gpt-5-codex"
-    )
-
-
-def _resolve_reasoning_choice(args: argparse.Namespace) -> str:
-    return (
-        args.reasoning
-        or os.environ.get("CI_COMMIT_REASONING")
-        or os.environ.get("OPENAI_REASONING_EFFORT")
-        or "high"
-    )
 
 
 def _read_staged_diff() -> str:
@@ -79,8 +61,14 @@ def _write_payload(payload: str, output_path: Path | None) -> int | None:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
-    model = _resolve_model_choice(args)
-    reasoning = _resolve_reasoning_choice(args)
+    # Use CI_COMMIT_* env vars if available, falling back to shared resolution
+    import os
+
+    model_arg = args.model or os.environ.get("CI_COMMIT_MODEL")
+    reasoning_arg = args.reasoning or os.environ.get("CI_COMMIT_REASONING")
+
+    model = resolve_model_choice(model_arg, validate=False)
+    reasoning = resolve_reasoning_choice(reasoning_arg, validate=False)
 
     staged_diff = _read_staged_diff()
     if not staged_diff.strip():

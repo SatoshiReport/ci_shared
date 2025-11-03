@@ -32,11 +32,7 @@ from ci_tools.scripts.policy_rules import (
     purge_bytecode_artifacts,
 )
 
-
-def write_module(path: Path, source: str) -> None:
-    """Helper to write a Python module."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(textwrap.dedent(source).strip() + "\n", encoding="utf-8")
+from conftest import write_module
 
 
 def test_policy_violation_exception():
