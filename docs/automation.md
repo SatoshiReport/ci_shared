@@ -10,7 +10,8 @@ automation interacts with Git.
    - Ensure the Git repository is on a branch (detached HEAD is rejected)
    - Validate the requested Codex model (`gpt-5-codex`) and reasoning effort
 2. **Iteration Loop**
-   - Run the user-specified CI command (default `./scripts/ci.sh`)
+   - Run the user-specified CI command (default `./scripts/ci.sh` with `CI_AUTOMATION=1`)
+   - The CI command runs all checks via `make check` but skips commit/push operations
    - Capture stdout/stderr, optionally trim to the last `--log-tail` lines
    - If the command fails, summarize the failure and prompt Codex for a patch
    - Apply the patch with multiple safety checks; retry up to `--patch-retries`

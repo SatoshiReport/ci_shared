@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, List, Optional, Sequence
 
+from ci_tools.scripts.guard_common import iter_python_files, normalize_path
+
 ROOT = Path(__file__).resolve().parents[1]
 SCAN_DIRECTORIES: Sequence[Path] = (ROOT / "src", ROOT / "tests")
 BANNED_KEYWORDS = (
@@ -104,20 +106,6 @@ def normalize_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     return ast.dump(clone, annotate_fields=False, include_attributes=False)
 
 
-def normalize_path(path: Path) -> str:
-    try:
-        return str(path.relative_to(ROOT)).replace("\\", "/")
-    except ValueError:
-        return str(path).replace("\\", "/")
-
-
-def iter_python_files(bases: Sequence[Path]) -> Iterator[Path]:
-    for base in bases:
-        if not base.exists():
-            continue
-        yield from base.rglob("*.py")
-
-
 def parse_ast(path: Path) -> ast.AST | None:
     try:
         return ast.parse(path.read_text())
@@ -147,7 +135,7 @@ def iter_module_contexts(
             tree = ast.parse(text, filename=str(path))
         except SyntaxError:
             continue
-        rel_path = normalize_path(path)
+        rel_path = normalize_path(path, ROOT)
         source = text if include_source else None
         lines = text.splitlines() if include_lines else None
         yield ModuleContext(
@@ -182,6 +170,22 @@ def get_call_qualname(node: ast.AST) -> str | None:
             return None
         return f"{base}.{node.attr}"
     return None
+
+
+def _sequence_element_has_literal(elt: ast.AST) -> bool:
+    if isinstance(elt, ast.Constant):
+        return isinstance(elt.value, (int, float, str))
+    if isinstance(elt, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
+        return contains_literal_dataset(elt)
+    return False
+
+
+def contains_literal_dataset(node: ast.AST) -> bool:
+    if isinstance(node, ast.Dict):
+        return any(contains_literal_dataset(value) for value in node.values)
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return any(_sequence_element_has_literal(elt) for elt in node.elts)
+    return isinstance(node, ast.Constant) and isinstance(node.value, (int, float, str))
 
 
 def is_non_none_literal(node: ast.AST | None) -> bool:
@@ -274,12 +278,10 @@ __all__ = [
     "ModuleContext",
     "FunctionNormalizer",
     "normalize_function",
-    "normalize_path",
-    "iter_python_files",
     "parse_ast",
     "iter_module_contexts",
-    "_resolve_default_argument",
     "get_call_qualname",
+    "contains_literal_dataset",
     "is_non_none_literal",
     "is_logging_call",
     "handler_has_raise",

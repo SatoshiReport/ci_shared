@@ -13,57 +13,10 @@ import sys
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
-
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Detect classes with excessive method counts (multi-concern indicator)."
-    )
-    parser.add_argument(
-        "--root",
-        type=Path,
-        help="Directory to scan for Python modules (initial: ./src).",
-    )
-    parser.add_argument(
-        "--max-public-methods",
-        type=int,
-        help="Maximum allowed public methods per class (initial: 15).",
-    )
-    parser.add_argument(
-        "--max-total-methods",
-        type=int,
-        help="Maximum allowed total methods (public + private) per class (initial: 25).",
-    )
-    parser.add_argument(
-        "--exclude",
-        action="append",
-        type=Path,
-        help="Path prefix to exclude from the scan (may be passed multiple times).",
-    )
-    parser.set_defaults(
-        root=Path("src"), max_public_methods=15, max_total_methods=25, exclude=[]
-    )
-    return parser.parse_args(list(argv) if argv is not None else None)
-
-
-def iter_python_files(root: Path) -> Iterable[Path]:
-    if not root.exists():
-        raise OSError(f"path does not exist: {root}")
-    if root.is_file():
-        if root.suffix == ".py":
-            yield root
-        return
-    for candidate in root.rglob("*.py"):
-        yield candidate
-
-
-def is_excluded(path: Path, exclusions: List[Path]) -> bool:
-    for excluded in exclusions:
-        try:
-            if path.is_relative_to(excluded):
-                return True
-        except ValueError:
-            continue
-    return False
+from ci_tools.scripts.guard_common import (
+    GuardRunner,
+    make_relative_path,
+)
 
 
 def count_methods(node: ast.ClassDef) -> Tuple[int, int]:
@@ -104,125 +57,83 @@ def count_methods(node: ast.ClassDef) -> Tuple[int, int]:
     return public_count, total_count
 
 
-def scan_file(
-    path: Path, max_public: int, max_total: int
-) -> List[Tuple[Path, str, int, int, int]]:
-    """Return list of (path, class_name, line_number, public_count, total_count) for violations."""
-    source = path.read_text()
-    try:
-        tree = ast.parse(source, filename=str(path))
-    except SyntaxError as exc:
-        raise RuntimeError(f"failed to parse Python source: {path} ({exc})") from exc
+class MethodCountGuard(GuardRunner):
+    """Guard that detects classes with excessive method counts."""
 
-    violations: List[Tuple[Path, str, int, int, int]] = []
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            public_count, total_count = count_methods(node)
-            if public_count > max_public or total_count > max_total:
-                violations.append(
-                    (path, node.name, node.lineno, public_count, total_count)
-                )
-
-    return violations
-
-
-def _format_method_violation(
-    entry_path: Path,
-    *,
-    class_name: str,
-    lineno: int,
-    public_count: int,
-    total_count: int,
-    max_public: int,
-    max_total: int,
-    repo_root: Path,
-) -> str:
-    try:
-        relative = entry_path.resolve().relative_to(repo_root)
-    except ValueError:
-        relative = entry_path
-    parts: List[str] = []
-    if public_count > max_public:
-        parts.append(f"{public_count} public methods (limit {max_public})")
-    if total_count > max_total:
-        parts.append(f"{total_count} total methods (limit {max_total})")
-    details = ", ".join(parts)
-    return f"{relative}:{lineno} class {class_name} has {details}"
-
-
-def _collect_method_violations(
-    path: Path,
-    *,
-    max_public: int,
-    max_total: int,
-    repo_root: Path,
-) -> List[str]:
-    entries = scan_file(path, max_public, max_total)
-    return [
-        _format_method_violation(
-            entry_path,
-            class_name=class_name,
-            lineno=lineno,
-            public_count=public_count,
-            total_count=total_count,
-            max_public=max_public,
-            max_total=max_total,
-            repo_root=repo_root,
+    def __init__(self):
+        super().__init__(
+            name="method_count_guard",
+            description="Detect classes with excessive method counts (multi-concern indicator).",
+            default_root=Path("src"),
         )
-        for entry_path, class_name, lineno, public_count, total_count in entries
-    ]
 
+    def setup_parser(self, parser: argparse.ArgumentParser) -> None:
+        """Add method-count-specific arguments."""
+        parser.add_argument(
+            "--max-public-methods",
+            type=int,
+            default=15,
+            help="Maximum allowed public methods per class (default: 15).",
+        )
+        parser.add_argument(
+            "--max-total-methods",
+            type=int,
+            default=25,
+            help="Maximum allowed total methods (public + private) per class (default: 25).",
+        )
 
-def _print_method_report(violations: List[str]) -> None:
-    header = (
-        "Classes with too many methods detected (multi-concern indicator). "
-        "Consider extracting service objects or using composition:"
-    )
-    print(header, file=sys.stderr)
-    for violation in sorted(violations):
-        print(f"  - {violation}", file=sys.stderr)
-    print(
-        "\nTip: Extract groups of related methods into separate service classes",
-        file=sys.stderr,
-    )
+    def _build_violation(
+        self,
+        path: Path,
+        node: ast.ClassDef,
+        pub: int,
+        tot: int,
+        args: argparse.Namespace,
+    ) -> Optional[str]:
+        """Build violation message if limits exceeded."""
+        if pub <= args.max_public_methods and tot <= args.max_total_methods:
+            return None
+        relative = make_relative_path(path, self.repo_root)
+        parts: List[str] = []
+        if pub > args.max_public_methods:
+            parts.append(f"{pub} public methods (limit {args.max_public_methods})")
+        if tot > args.max_total_methods:
+            parts.append(f"{tot} total methods (limit {args.max_total_methods})")
+        return f"{relative}:{node.lineno} class {node.name} has {', '.join(parts)}"
+
+    def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
+        """Scan a file for method count violations."""
+        source = path.read_text()
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            raise RuntimeError(
+                f"failed to parse Python source: {path} ({exc})"
+            ) from exc
+        violations: List[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                pub, tot = count_methods(node)
+                if violation := self._build_violation(path, node, pub, tot, args):
+                    violations.append(violation)
+        return violations
+
+    def get_violations_header(self, args: argparse.Namespace) -> str:
+        """Get the header for violations report."""
+        return (
+            "Classes with too many methods detected (multi-concern indicator). "
+            "Consider extracting service objects or using composition:"
+        )
+
+    def get_violations_footer(self, args: argparse.Namespace) -> Optional[str]:
+        """Get the footer tip for violations report."""
+        return "Tip: Extract groups of related methods into separate service classes"
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
-    args = parse_args(argv)
-    root = args.root.resolve()
-    exclusions = [path.resolve() for path in args.exclude]
-    repo_root = Path.cwd()
-
-    try:
-        file_iter = list(iter_python_files(root))
-    except OSError as exc:
-        print(f"method_count_guard: failed to traverse {root}: {exc}", file=sys.stderr)
-        return 1
-
-    violations: List[str] = []
-    for file_path in file_iter:
-        resolved = file_path.resolve()
-        if is_excluded(resolved, exclusions):
-            continue
-        try:
-            violations.extend(
-                _collect_method_violations(
-                    resolved,
-                    max_public=args.max_public_methods,
-                    max_total=args.max_total_methods,
-                    repo_root=repo_root,
-                )
-            )
-        except RuntimeError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-
-    if violations:
-        _print_method_report(violations)
-        return 1
-
-    return 0
+    """Main entry point for method_count_guard."""
+    guard = MethodCountGuard()
+    return guard.run(argv)
 
 
 if __name__ == "__main__":

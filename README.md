@@ -9,6 +9,7 @@ stable.
 - Codex-powered CI repair loop with configurable safety rails
 - Legacy-compatible `xci.sh` wrapper that archives Codex prompts/responses
 - Extensive guard suite (policy, coverage, module size, structure, etc.)
+- **Security scanning**: gitleaks (secrets), bandit (security issues), safety (CVE database)
 - Reusable `ci_shared.mk` target bundling linters, formatters, and guards
 - Lightweight vendored dependencies for reproducible automation environments
 
@@ -49,9 +50,9 @@ Key guard scripts live under `ci_tools/scripts/` and `scripts/`:
 - `coverage_guard.py` – enforces per-file coverage thresholds
 - `documentation_guard.py` – verifies that required docs exist
 - `scripts/complexity_guard.py` – limits cyclomatic and cognitive complexity
+- **Security**: gitleaks (secret detection), bandit (security linting), safety (dependency CVEs)
 
-See the [Guard Suite reference](docs/guard-suite.md) for the full list of
-scripts and configuration knobs.
+See the [Guard Suite reference](docs/guard-suite.md) and [Security Guidelines](SECURITY.md) for details.
 
 ## Documentation
 - [Getting Started](docs/getting-started.md)

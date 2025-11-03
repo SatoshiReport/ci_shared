@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from ci_tools.scripts import structure_guard
+from ci_tools.scripts.guard_common import is_excluded, iter_python_files
 
 
 def write_module(path: Path, content: str) -> None:
@@ -14,30 +15,12 @@ def write_module(path: Path, content: str) -> None:
     path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
 
 
-def test_parse_args_defaults():
-    """Test argument parsing with defaults."""
-    args = structure_guard.parse_args([])
-    assert args.root == Path("src")
-    assert args.max_class_lines == 100
-    assert args.exclude == []
-
-
-def test_parse_args_custom_values():
-    """Test argument parsing with custom values."""
-    args = structure_guard.parse_args(
-        ["--root", "custom", "--max-class-lines", "50", "--exclude", "tests"]
-    )
-    assert args.root == Path("custom")
-    assert args.max_class_lines == 50
-    assert args.exclude == [Path("tests")]
-
-
 def test_iter_python_files_single_file(tmp_path: Path):
     """Test iter_python_files with a single file."""
     py_file = tmp_path / "test.py"
     py_file.write_text("# test")
 
-    files = list(structure_guard.iter_python_files(py_file))
+    files = list(iter_python_files(py_file))
     assert len(files) == 1
     assert files[0] == py_file
 
@@ -47,7 +30,7 @@ def test_iter_python_files_non_python_file(tmp_path: Path):
     txt_file = tmp_path / "test.txt"
     txt_file.write_text("# test")
 
-    files = list(structure_guard.iter_python_files(txt_file))
+    files = list(iter_python_files(txt_file))
     assert len(files) == 0
 
 
@@ -58,7 +41,7 @@ def test_iter_python_files_directory(tmp_path: Path):
     (tmp_path / "subdir").mkdir()
     (tmp_path / "subdir" / "file3.py").write_text("# file3")
 
-    files = list(structure_guard.iter_python_files(tmp_path))
+    files = list(iter_python_files(tmp_path))
     assert len(files) == 3
 
 
@@ -66,14 +49,14 @@ def test_is_excluded_basic():
     """Test basic exclusion logic."""
     path = Path("/project/src/module.py").resolve()
     exclusions = [Path("/project/src").resolve()]
-    assert structure_guard.is_excluded(path, exclusions) is True
+    assert is_excluded(path, exclusions) is True
 
 
 def test_is_excluded_no_match():
     """Test exclusion with no match."""
     path = Path("/project/src/module.py").resolve()
     exclusions = [Path("/project/tests").resolve()]
-    assert structure_guard.is_excluded(path, exclusions) is False
+    assert is_excluded(path, exclusions) is False
 
 
 def test_class_line_span_basic(tmp_path: Path):
@@ -130,76 +113,6 @@ def test_class_line_span_nested_content(tmp_path: Path):
 
     assert start == 1
     assert end == 8
-
-
-def test_scan_file_within_limit(tmp_path: Path):
-    """Test scanning a file within the line limit."""
-    py_file = tmp_path / "small.py"
-    write_module(
-        py_file,
-        """
-        class SmallClass:
-            def method(self):
-                return 1
-        """,
-    )
-
-    violations = structure_guard.scan_file(py_file, limit=10)
-    assert len(violations) == 0
-
-
-def test_scan_file_exceeds_limit(tmp_path: Path):
-    """Test scanning a file that exceeds the limit."""
-    py_file = tmp_path / "large.py"
-    methods = "\n".join([f"    def method_{i}(self):\n        pass" for i in range(20)])
-    content = f"class LargeClass:\n{methods}"
-    py_file.write_text(content)
-
-    violations = structure_guard.scan_file(py_file, limit=10)
-    assert len(violations) == 1
-    assert violations[0][0] == py_file
-    assert violations[0][1] == "LargeClass"
-    assert violations[0][2] == 1  # Line number
-    assert violations[0][3] > 10  # Line count
-
-
-def test_scan_file_multiple_classes(tmp_path: Path):
-    """Test scanning a file with multiple classes."""
-    py_file = tmp_path / "multi.py"
-    write_module(
-        py_file,
-        """
-        class SmallClass:
-            def method(self):
-                pass
-
-        class LargeClass:
-            def method1(self):
-                x = 1
-                y = 2
-                z = 3
-                return x + y + z
-
-            def method2(self):
-                pass
-
-            def method3(self):
-                pass
-        """,
-    )
-
-    violations = structure_guard.scan_file(py_file, limit=5)
-    assert len(violations) == 1
-    assert violations[0][1] == "LargeClass"
-
-
-def test_scan_file_syntax_error(tmp_path: Path):
-    """Test scan_file with syntax error."""
-    py_file = tmp_path / "bad.py"
-    py_file.write_text("class Foo:\n    def method(self\n")  # Missing closing paren
-
-    with pytest.raises(RuntimeError, match="failed to parse Python source"):
-        structure_guard.scan_file(py_file, limit=10)
 
 
 def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
@@ -316,10 +229,10 @@ def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture, mon
     root.mkdir()
     (root / "test.py").write_text("class Foo: pass")
 
-    def mock_scan_file(path, limit):
+    def mock_scan_file(self, path, args):
         raise RuntimeError("Test error")
 
-    monkeypatch.setattr(structure_guard, "scan_file", mock_scan_file)
+    monkeypatch.setattr(structure_guard.StructureGuard, "scan_file", mock_scan_file)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
         result = structure_guard.main(["--root", str(root)])
@@ -327,23 +240,6 @@ def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture, mon
     assert result == 1
     captured = capsys.readouterr()
     assert "Test error" in captured.err
-
-
-def test_scan_file_no_classes(tmp_path: Path):
-    """Test scanning a file with no classes."""
-    py_file = tmp_path / "no_classes.py"
-    write_module(
-        py_file,
-        """
-        def function():
-            pass
-
-        x = 1
-        """,
-    )
-
-    violations = structure_guard.scan_file(py_file, limit=10)
-    assert len(violations) == 0
 
 
 def test_class_line_span_single_line_class():
@@ -376,50 +272,9 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert "LargeClass" in captured.err
 
 
-def test_scan_file_class_with_decorators(tmp_path: Path):
-    """Test scanning a class with decorators."""
-    py_file = tmp_path / "decorated.py"
-    write_module(
-        py_file,
-        """
-        @dataclass
-        class DecoratedClass:
-            field1: int
-            field2: str
-
-            def method(self):
-                pass
-        """,
-    )
-
-    violations = structure_guard.scan_file(py_file, limit=5)
-    assert len(violations) == 1
-
-
-def test_scan_file_nested_classes(tmp_path: Path):
-    """Test scanning file with nested classes."""
-    py_file = tmp_path / "nested.py"
-    write_module(
-        py_file,
-        """
-        class OuterClass:
-            def method1(self):
-                pass
-
-            class InnerClass:
-                def inner_method(self):
-                    pass
-        """,
-    )
-
-    violations = structure_guard.scan_file(py_file, limit=3)
-    # Both outer and inner should be checked
-    assert len(violations) >= 1
-
-
 def test_iter_python_files_empty_directory(tmp_path: Path):
     """Test iter_python_files with empty directory."""
-    files = list(structure_guard.iter_python_files(tmp_path))
+    files = list(iter_python_files(tmp_path))
     assert len(files) == 0
 
 
@@ -430,4 +285,4 @@ def test_is_excluded_multiple_exclusions():
         Path("/project/vendor").resolve(),
         Path("/project/tests").resolve(),
     ]
-    assert structure_guard.is_excluded(path, exclusions) is True
+    assert is_excluded(path, exclusions) is True

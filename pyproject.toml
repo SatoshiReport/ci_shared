@@ -53,3 +53,13 @@ omit = [
     "*/vendor/*",
     "*/__main__.py",
 ]
+
+[tool.bandit]
+# Skip checks that are expected/acceptable in our codebase
+skips = [
+    "B101",  # assert_used - used appropriately in tests
+    "B404",  # import_subprocess - required for CI automation
+    "B603",  # subprocess_without_shell_equals_true - our subprocess calls are safe
+    "B607",  # start_process_with_partial_path - standard system commands (git, etc.)
+]
+exclude_dirs = ["/vendor/", "/.venv/", "/venv/"]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import textwrap
 from pathlib import Path
 from unittest.mock import patch
@@ -7,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from ci_tools.scripts import module_guard
+from ci_tools.scripts.guard_common import is_excluded, iter_python_files
 
 
 def write_module(path: Path, content: str) -> None:
@@ -16,7 +18,8 @@ def write_module(path: Path, content: str) -> None:
 
 def test_parse_args_defaults():
     """Test argument parsing with defaults."""
-    args = module_guard.parse_args([])
+    guard = module_guard.ModuleGuard()
+    args = guard.parse_args([])
     assert args.root == Path("src")
     assert args.max_module_lines == 600
     assert args.exclude == []
@@ -24,7 +27,8 @@ def test_parse_args_defaults():
 
 def test_parse_args_custom_values():
     """Test argument parsing with custom values."""
-    args = module_guard.parse_args(
+    guard = module_guard.ModuleGuard()
+    args = guard.parse_args(
         ["--root", "custom", "--max-module-lines", "100", "--exclude", "tests", "--exclude", "vendor"]
     )
     assert args.root == Path("custom")
@@ -37,7 +41,7 @@ def test_iter_python_files_single_file(tmp_path: Path):
     py_file = tmp_path / "test.py"
     py_file.write_text("# test")
 
-    files = list(module_guard.iter_python_files(py_file))
+    files = list(iter_python_files(py_file))
     assert len(files) == 1
     assert files[0] == py_file
 
@@ -47,7 +51,7 @@ def test_iter_python_files_non_python_file(tmp_path: Path):
     txt_file = tmp_path / "test.txt"
     txt_file.write_text("# test")
 
-    files = list(module_guard.iter_python_files(txt_file))
+    files = list(iter_python_files(txt_file))
     assert len(files) == 0
 
 
@@ -59,7 +63,7 @@ def test_iter_python_files_directory(tmp_path: Path):
     (tmp_path / "subdir" / "file3.py").write_text("# file3")
     (tmp_path / "readme.txt").write_text("# readme")
 
-    files = list(module_guard.iter_python_files(tmp_path))
+    files = list(iter_python_files(tmp_path))
     assert len(files) == 3
     assert all(f.suffix == ".py" for f in files)
 
@@ -68,21 +72,21 @@ def test_is_excluded_basic():
     """Test basic exclusion logic."""
     path = Path("/project/src/module.py").resolve()
     exclusions = [Path("/project/src").resolve()]
-    assert module_guard.is_excluded(path, exclusions) is True
+    assert is_excluded(path, exclusions) is True
 
 
 def test_is_excluded_no_match():
     """Test exclusion with no match."""
     path = Path("/project/src/module.py").resolve()
     exclusions = [Path("/project/tests").resolve()]
-    assert module_guard.is_excluded(path, exclusions) is False
+    assert is_excluded(path, exclusions) is False
 
 
 def test_is_excluded_value_error():
     """Test exclusion handles ValueError correctly."""
     path = Path("/project/src/module.py")
     exclusions = [Path("/other/path")]
-    result = module_guard.is_excluded(path, exclusions)
+    result = is_excluded(path, exclusions)
     assert result is False
 
 
@@ -152,8 +156,11 @@ def test_scan_file_within_limit(tmp_path: Path):
         """,
     )
 
-    result = module_guard.scan_file(py_file, limit=10)
-    assert result is None
+    guard = module_guard.ModuleGuard()
+    args = argparse.Namespace(max_module_lines=10)
+    guard.repo_root = tmp_path
+    result = guard.scan_file(py_file, args)
+    assert result == []
 
 
 def test_scan_file_exceeds_limit(tmp_path: Path):
@@ -162,18 +169,25 @@ def test_scan_file_exceeds_limit(tmp_path: Path):
     content = "\n".join([f"line_{i} = {i}" for i in range(20)])
     py_file.write_text(content)
 
-    result = module_guard.scan_file(py_file, limit=10)
-    assert result is not None
-    assert result[0] == py_file
-    assert result[1] == 20
+    guard = module_guard.ModuleGuard()
+    args = argparse.Namespace(max_module_lines=10)
+    guard.repo_root = tmp_path
+    result = guard.scan_file(py_file, args)
+    assert len(result) == 1
+    assert "large.py" in result[0]
+    assert "20 lines" in result[0]
 
 
 def test_scan_file_oserror(tmp_path: Path):
     """Test scan_file raises RuntimeError on OSError."""
     py_file = tmp_path / "nonexistent.py"
 
+    guard = module_guard.ModuleGuard()
+    args = argparse.Namespace(max_module_lines=10)
+    guard.repo_root = tmp_path
+
     with pytest.raises(RuntimeError, match="failed to read Python source"):
-        module_guard.scan_file(py_file, limit=10)
+        guard.scan_file(py_file, args)
 
 
 def test_scan_file_unicode_decode_error(tmp_path: Path):
@@ -181,8 +195,12 @@ def test_scan_file_unicode_decode_error(tmp_path: Path):
     py_file = tmp_path / "bad_encoding.py"
     py_file.write_bytes(b"\xff\xfe\x00\x00")  # Invalid UTF-8
 
+    guard = module_guard.ModuleGuard()
+    args = argparse.Namespace(max_module_lines=10)
+    guard.repo_root = tmp_path
+
     with pytest.raises(RuntimeError, match="failed to read Python source"):
-        module_guard.scan_file(py_file, limit=10)
+        guard.scan_file(py_file, args)
 
 
 def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
@@ -305,10 +323,10 @@ def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture, mon
     root.mkdir()
     (root / "test.py").write_text("# test")
 
-    def mock_scan_file(path, limit):
+    def mock_scan_file(self, path, args):
         raise RuntimeError("Test error")
 
-    monkeypatch.setattr(module_guard, "scan_file", mock_scan_file)
+    monkeypatch.setattr(module_guard.ModuleGuard, "scan_file", mock_scan_file)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
         result = module_guard.main(["--root", str(root)])
@@ -320,7 +338,7 @@ def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture, mon
 
 def test_iter_python_files_empty_directory(tmp_path: Path):
     """Test iter_python_files with empty directory."""
-    files = list(module_guard.iter_python_files(tmp_path))
+    files = list(iter_python_files(tmp_path))
     assert len(files) == 0
 
 
@@ -364,11 +382,11 @@ def test_is_excluded_multiple_exclusions():
         Path("/project/tests").resolve(),
         Path("/project/docs").resolve(),
     ]
-    assert module_guard.is_excluded(path, exclusions) is True
+    assert is_excluded(path, exclusions) is True
 
 
 def test_is_excluded_partial_match():
     """Test exclusion doesn't match partial paths."""
     path = Path("/project/src/tests_helper.py").resolve()
     exclusions = [Path("/project/tests").resolve()]
-    assert module_guard.is_excluded(path, exclusions) is False
+    assert is_excluded(path, exclusions) is False

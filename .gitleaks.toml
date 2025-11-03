@@ -1,0 +1,56 @@
+# Gitleaks configuration for ci_shared
+# See: https://github.com/gitleaks/gitleaks#configuration
+
+title = "gitleaks config for ci_shared"
+
+[extend]
+# Use default gitleaks rules
+useDefault = true
+
+[allowlist]
+description = "Allowlisted files and patterns"
+
+# Allowlist paths that commonly have false positives
+paths = [
+    '''\.git/''',
+    '''node_modules/''',
+    '''vendor/''',
+    '''htmlcov/''',
+    '''\.coverage''',
+    '''\.pytest_cache/''',
+    '''__pycache__/''',
+    '''.xci/''',
+    '''logs/''',
+]
+
+# Allowlist specific patterns
+regexes = [
+    # Test fixtures with fake data
+    '''(fake|dummy|mock|test)[-_](key|secret|token|password)''',
+    # Example configurations
+    '''example[_-]config''',
+    '''config[._-]example''',
+    # Common false positives
+    '''EXAMPLE_API_KEY''',
+    '''YOUR_API_KEY_HERE''',
+    '''INSERT_YOUR_''',
+]
+
+# Allowlist specific commits (if needed)
+# commits = ["commit-sha-here"]
+
+# Entropy detection settings
+[[rules]]
+id = "high-entropy-strings"
+description = "Detect high entropy strings (potential secrets)"
+# entropy range: 0.0 to 8.0, higher = more random
+regex = '''[A-Za-z0-9+/]{40,}'''
+entropyMin = 4.5
+entropyMax = 8.0
+
+# Additional custom rules can be added here
+# Example:
+# [[rules]]
+# id = "custom-internal-api-key"
+# description = "Internal API key pattern"
+# regex = '''internal[-_]api[-_]key\s*[:=]\s*['"]?([A-Za-z0-9]{32,})'''

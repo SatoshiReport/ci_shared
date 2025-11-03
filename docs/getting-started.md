@@ -8,9 +8,9 @@ repository, and running the automation loop for the first time.
 - `pip` and `virtualenv` (recommended for isolated installs)
 - Access to the [Codex CLI](https://github.com/kalshi-trading/codex-cli) with a
   valid `OPENAI_API_KEY`
-- Git repository with one of:
-  - `scripts/ci.sh` (legacy automation entrypoint)
-  - or a custom CI command compatible with `ci_tools.ci`
+- Git repository with a `scripts/ci.sh` file
+  - In consuming repos: Should delegate to `ci_tools/scripts/ci.sh` (installed via this package)
+  - The shared CI script handles check execution, commit generation, and push
 
 ## Install the Package
 From the consuming repository root, install `codex-ci-tools` in editable mode so
@@ -46,15 +46,27 @@ messages.
 
 ## Quick Usage
 
-### Python Interface (preferred)
+### Running CI Directly
+```bash
+./scripts/ci.sh      # Runs full CI: checks → commit → push
+CI_AUTOMATION=1 ./scripts/ci.sh  # Checks only, no git operations
+```
+
+The `scripts/ci.sh` wrapper delegates to `ci_tools/scripts/ci.sh`, which:
+- Installs missing test dependencies
+- Runs `make check` to execute all guards and tests
+- Stages changes and generates Codex commit messages (unless `CI_AUTOMATION=1`)
+- Commits and pushes to remote (interactive mode only)
+
+### Python Automation Interface (for repair loops)
 ```bash
 python -m ci_tools.ci --model gpt-5-codex --reasoning-effort high
 ```
 
-- Runs the configured CI command (default: `./scripts/ci.sh`)
+- Runs the configured CI command (default: `./scripts/ci.sh` with `CI_AUTOMATION=1`)
 - Streams logs to Codex when failures occur
 - Applies Codex patches while enforcing protected path rules
-- Generates a commit message (and optionally pushes) when checks pass
+- Generates a commit message when checks pass
 
 ### Bash Wrapper (legacy)
 ```bash

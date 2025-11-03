@@ -18,7 +18,6 @@ via the shared Makefile target `shared-checks` in `ci_shared.mk`.
 | `structure_guard.py` | Enforces directory layout, class counts, and other structural invariants. | `--root`, `--max-class-lines`, `--max-depth`. |
 | `method_count_guard.py` | Limits public and total methods per class to keep APIs manageable. | `--root`, `--max-public-methods`, `--max-total-methods`, `--exclude`. |
 | `inheritance_guard.py` | Rejects class hierarchies deeper than a safe maximum. | `--root`, `--max-depth`. |
-| `directory_depth_guard.py` | Prevents nested package hierarchies beyond the configured depth. | `--root`, `--max-depth`. |
 | `documentation_guard.py` | Ensures foundational docs exist (`README.md`, `CLAUDE.md`, per-module docs, architecture guides). | `--root`. |
 | `complexity_guard.py` (`scripts/complexity_guard.py`) | Enforces cyclomatic and cognitive complexity ceilings using Radon heuristics. | `--root`, `--max-cyclomatic`, `--max-cognitive`. |
 
@@ -26,9 +25,10 @@ via the shared Makefile target `shared-checks` in `ci_shared.mk`.
 > inclusion in CI pipelines.
 
 ### Related Helpers
-- `ci_tools/scripts/ci.sh` – wraps `make check`, installs missing test deps, and orchestrates commit/push when automation succeeds.
-- `ci_tools/scripts/xci.sh` – legacy bash interface that shells out to CI, archives Codex conversations, and requests commit messages.
-- `ci_tools/scripts/generate_commit_message.py` – shared helper that asks Codex for a commit summary/body given the staged diff.
+- `ci_tools/scripts/ci.sh` – Primary CI script that wraps `make check`, installs missing test deps, and orchestrates commit/push when automation succeeds. Used directly by consuming repos and ci_shared itself.
+- `scripts/ci.sh` – Repository-level wrapper that delegates to `ci_tools/scripts/ci.sh`. Ensures consistent CI flow across all repositories.
+- `ci_tools/scripts/xci.sh` – Legacy bash interface that shells out to CI, archives Codex conversations, and requests commit messages.
+- `ci_tools/scripts/generate_commit_message.py` – Shared helper that asks Codex for a commit summary/body given the staged diff.
 
 ## Makefile Integration
 

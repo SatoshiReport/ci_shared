@@ -177,9 +177,8 @@ def test_normalize_function_async():
 
 def test_normalize_path(tmp_path, monkeypatch):
     """Test normalize_path converts to relative path."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
     test_file = tmp_path / "subdir" / "file.py"
-    result = normalize_path(test_file)
+    result = normalize_path(test_file, tmp_path)
     assert result == "subdir/file.py"
 
 

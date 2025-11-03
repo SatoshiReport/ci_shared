@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeGuard
 
+from ci_tools.scripts.policy_context import (
+    contains_literal_dataset,
+    get_call_qualname,
+    normalize_path,
+    parse_ast,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 SCAN_DIRECTORIES: Sequence[Path] = (ROOT / "src", ROOT / "tests")
 ALLOWLIST_PATH = ROOT / "config" / "data_guard_allowlist.json"
@@ -99,17 +106,6 @@ def iter_python_files(bases: Sequence[Path]) -> Iterator[Path]:
         yield from base.rglob("*.py")
 
 
-def normalize_path(path: Path) -> str:
-    return str(path.relative_to(ROOT)).replace("\\", "/")
-
-
-def parse_ast(path: Path) -> ast.AST | None:
-    try:
-        return ast.parse(path.read_text())
-    except Exception:
-        return None
-
-
 def extract_target_names(target: ast.AST) -> Iterable[str]:
     if isinstance(target, ast.Name):
         yield target.id
@@ -159,22 +155,6 @@ def _should_flag_comparison(names: Iterable[str]) -> bool:
     if all(_is_all_caps_identifier(name) for name in identifiers):
         return False
     return not any(_allowlisted(name, "comparisons") for name in identifiers)
-
-
-def _sequence_element_has_literal(elt: ast.AST) -> bool:
-    if isinstance(elt, ast.Constant):
-        return isinstance(elt.value, (int, float, str))
-    if isinstance(elt, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
-        return contains_literal_dataset(elt)
-    return False
-
-
-def contains_literal_dataset(node: ast.AST) -> bool:
-    if isinstance(node, ast.Dict):
-        return any(contains_literal_dataset(value) for value in node.values)
-    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        return any(_sequence_element_has_literal(elt) for elt in node.elts)
-    return isinstance(node, ast.Constant) and isinstance(node.value, (int, float, str))
 
 
 def _flatten_assignment_targets(targets: Iterable[ast.AST]) -> list[str]:
@@ -339,17 +319,6 @@ def collect_numeric_comparisons() -> List[Violation]:
             continue
         violations.extend(_iter_numeric_comparison_violations(path, tree))
     return violations
-
-
-def get_call_qualname(node: ast.AST) -> str | None:
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        base = get_call_qualname(node.value)
-        if base is None:
-            return None
-        return f"{base}.{node.attr}"
-    return None
 
 
 def collect_all_violations() -> List[Violation]:

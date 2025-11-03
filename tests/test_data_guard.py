@@ -434,10 +434,9 @@ class TestIterators:
 
     def test_normalize_path(self, tmp_path: Path) -> None:
         """Test path normalization."""
-        with patch.object(data_guard, "ROOT", tmp_path):
-            path = tmp_path / "src" / "module.py"
-            normalized = data_guard.normalize_path(path)
-            assert normalized == "src/module.py"
+        path = tmp_path / "src" / "module.py"
+        normalized = data_guard.normalize_path(path, tmp_path)
+        assert normalized == "src/module.py"
 
 
 class TestViolationDataclass:

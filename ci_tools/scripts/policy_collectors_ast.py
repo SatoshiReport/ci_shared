@@ -29,22 +29,6 @@ from .policy_context import (
 )
 
 
-def _sequence_element_has_literal(elt: ast.AST) -> bool:
-    if isinstance(elt, ast.Constant):
-        return isinstance(elt.value, (int, float, str))
-    if isinstance(elt, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
-        return contains_literal_dataset(elt)
-    return False
-
-
-def contains_literal_dataset(node: ast.AST) -> bool:
-    if isinstance(node, ast.Dict):
-        return any(contains_literal_dataset(value) for value in node.values)
-    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        return any(_sequence_element_has_literal(elt) for elt in node.elts)
-    return isinstance(node, ast.Constant) and isinstance(node.value, (int, float, str))
-
-
 def collect_long_functions(threshold: int) -> Iterable[FunctionEntry]:
     src_root = ROOT / "src"
     for ctx in iter_module_contexts((src_root,)):

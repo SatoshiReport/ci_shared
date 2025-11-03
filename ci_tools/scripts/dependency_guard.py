@@ -11,53 +11,12 @@ import argparse
 import ast
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional
 
-
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Detect classes with excessive dependency instantiation."
-    )
-    parser.add_argument(
-        "--root",
-        type=Path,
-        help="Directory to scan for Python modules (initial: ./src).",
-    )
-    parser.add_argument(
-        "--max-instantiations",
-        type=int,
-        help="Maximum allowed object instantiations in __init__/__post_init__ (initial: 8).",
-    )
-    parser.add_argument(
-        "--exclude",
-        action="append",
-        type=Path,
-        help="Path prefix to exclude from the scan (may be passed multiple times).",
-    )
-    parser.set_defaults(root=Path("src"), max_instantiations=8, exclude=[])
-    return parser.parse_args(list(argv) if argv is not None else None)
-
-
-def iter_python_files(root: Path) -> Iterable[Path]:
-    if not root.exists():
-        raise OSError(f"Path does not exist: {root}")
-    if root.is_file():
-        if root.suffix == ".py":
-            yield root
-        return
-    for candidate in root.rglob("*.py"):
-        yield candidate
-
-
-def is_excluded(path: Path, exclusions: List[Path]) -> bool:
-    for excluded in exclusions:
-        try:
-            if path.is_relative_to(excluded):
-                return True
-        except ValueError:
-            continue
-    return False
-
+from ci_tools.scripts.guard_common import (
+    GuardRunner,
+    make_relative_path,
+)
 
 SKIPPED_CONSTRUCTOR_NAMES = {
     "Path",
@@ -85,7 +44,7 @@ def _is_constructor_name(name: str) -> bool:
     return name[0].isupper() and name not in SKIPPED_CONSTRUCTOR_NAMES
 
 
-def count_instantiations(func_node: ast.FunctionDef) -> Tuple[int, List[str]]:
+def count_instantiations(func_node: ast.FunctionDef) -> tuple[int, List[str]]:
     """Count object instantiations (calls that look like constructors)."""
     count = 0
     instantiated_classes: List[str] = []
@@ -99,128 +58,81 @@ def count_instantiations(func_node: ast.FunctionDef) -> Tuple[int, List[str]]:
     return count, instantiated_classes
 
 
-def scan_file(
-    path: Path, max_instantiations: int
-) -> List[Tuple[Path, str, int, int, List[str]]]:
-    """Return list of (path, class_name, line, count, classes) for violations."""
-    source = path.read_text()
-    try:
-        tree = ast.parse(source, filename=str(path))
-    except SyntaxError as exc:
-        raise RuntimeError(f"failed to parse Python source: {path} ({exc})") from exc
+class DependencyGuard(GuardRunner):
+    """Guard that detects excessive dependency instantiation."""
 
-    violations: List[Tuple[Path, str, int, int, List[str]]] = []
-
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
-            continue
-
-        # Check __init__ and __post_init__ methods
-        for item in node.body:
-            if not isinstance(item, ast.FunctionDef):
-                continue
-            if item.name not in ("__init__", "__post_init__"):
-                continue
-
-            count, instantiated = count_instantiations(item)
-            if count > max_instantiations:
-                violations.append((path, node.name, node.lineno, count, instantiated))
-
-    return violations
-
-
-def _format_violation(
-    entry_path: Path,
-    *,
-    class_name: str,
-    lineno: int,
-    count: int,
-    instantiated: List[str],
-    limit: int,
-    repo_root: Path,
-) -> str:
-    try:
-        relative = entry_path.resolve().relative_to(repo_root)
-    except ValueError:
-        relative = entry_path
-    classes_str = ", ".join(instantiated[:5])
-    if len(instantiated) > 5:
-        classes_str += f", ... ({len(instantiated) - 5} more)"
-    return (
-        f"{relative}:{lineno} class {class_name} instantiates {count} dependencies "
-        f"(limit {limit}) - [{classes_str}]"
-    )
-
-
-def _collect_file_violations(
-    path: Path,
-    *,
-    max_instantiations: int,
-    repo_root: Path,
-) -> List[str]:
-    entries = scan_file(path, max_instantiations)
-    return [
-        _format_violation(
-            entry_path,
-            class_name=class_name,
-            lineno=lineno,
-            count=count,
-            instantiated=instantiated,
-            limit=max_instantiations,
-            repo_root=repo_root,
+    def __init__(self):
+        super().__init__(
+            name="dependency_guard",
+            description="Detect classes with excessive dependency instantiation.",
+            default_root=Path("src"),
         )
-        for entry_path, class_name, lineno, count, instantiated in entries
-    ]
 
+    def setup_parser(self, parser: argparse.ArgumentParser) -> None:
+        """Add dependency-specific arguments."""
+        parser.add_argument(
+            "--max-instantiations",
+            type=int,
+            default=8,
+            help="Maximum allowed object instantiations in __init__/__post_init__ (default: 8).",
+        )
 
-def _print_violation_report(violations: List[str], limit: int) -> None:
-    header = (
-        "Classes with too many dependency instantiations detected. "
-        "Consider dependency injection or extracting coordinators:"
-    )
-    print(header, file=sys.stderr)
-    for violation in sorted(violations):
-        print(f"  - {violation}", file=sys.stderr)
-    print(
-        "\nTip: Pass dependencies via __init__ parameters instead of instantiating them internally",
-        file=sys.stderr,
-    )
+    def _check_class_init(
+        self, node: ast.ClassDef, path: Path, max_inst: int
+    ) -> Optional[str]:
+        """Check __init__/__post_init__ for excessive instantiations."""
+        for item in node.body:
+            if not isinstance(item, ast.FunctionDef) or item.name not in (
+                "__init__",
+                "__post_init__",
+            ):
+                continue
+            count, instantiated = count_instantiations(item)
+            if count > max_inst:
+                relative = make_relative_path(path, self.repo_root)
+                classes_str = ", ".join(instantiated[:5])
+                if len(instantiated) > 5:
+                    classes_str += f", ... ({len(instantiated) - 5} more)"
+                return (
+                    f"{relative}:{node.lineno} class {node.name} instantiates {count} dependencies "
+                    f"(limit {max_inst}) - [{classes_str}]"
+                )
+        return None
+
+    def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
+        """Scan a file for dependency instantiation violations."""
+        source = path.read_text()
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            raise RuntimeError(
+                f"failed to parse Python source: {path} ({exc})"
+            ) from exc
+        violations: List[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                if violation := self._check_class_init(
+                    node, path, args.max_instantiations
+                ):
+                    violations.append(violation)
+        return violations
+
+    def get_violations_header(self, args: argparse.Namespace) -> str:
+        """Get the header for violations report."""
+        return (
+            "Classes with too many dependency instantiations detected. "
+            "Consider dependency injection or extracting coordinators:"
+        )
+
+    def get_violations_footer(self, args: argparse.Namespace) -> Optional[str]:
+        """Get the footer tip for violations report."""
+        return "Tip: Pass dependencies via __init__ parameters instead of instantiating them internally"
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
-    args = parse_args(argv)
-    root = args.root.resolve()
-    exclusions = [path.resolve() for path in args.exclude]
-    repo_root = Path.cwd()
-
-    try:
-        file_iter = list(iter_python_files(root))
-    except OSError as exc:
-        print(f"dependency_guard: failed to traverse {root}: {exc}", file=sys.stderr)
-        return 1
-
-    violations: List[str] = []
-    for file_path in file_iter:
-        resolved = file_path.resolve()
-        if is_excluded(resolved, exclusions):
-            continue
-        try:
-            violations.extend(
-                _collect_file_violations(
-                    resolved,
-                    max_instantiations=args.max_instantiations,
-                    repo_root=repo_root,
-                )
-            )
-        except RuntimeError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-
-    if violations:
-        _print_violation_report(violations, args.max_instantiations)
-        return 1
-
-    return 0
+    """Main entry point for dependency_guard."""
+    guard = DependencyGuard()
+    return guard.run(argv)
 
 
 if __name__ == "__main__":

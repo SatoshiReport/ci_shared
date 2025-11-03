@@ -201,20 +201,6 @@ def test_get_module_name_root_init(tmp_path: Path):
     assert module_name == ""
 
 
-def test_is_false_positive_temperature():
-    """Test false positive detection for temperature patterns."""
-    assert unused_module_guard._is_false_positive("max_temp") is True
-    assert unused_module_guard._is_false_positive("temperature") is True
-    assert unused_module_guard._is_false_positive("_temp_only") is False
-
-
-def test_is_false_positive_phase_2():
-    """Test false positive detection for phase_2 pattern."""
-    assert unused_module_guard._is_false_positive("phase_2") is True
-    assert unused_module_guard._is_false_positive("feature_v2") is True
-    assert unused_module_guard._is_false_positive("_2_only") is False
-
-
 def test_duplicate_reason_suspicious():
     """Test detecting suspicious duplicate patterns."""
     assert unused_module_guard._duplicate_reason("module_old") is not None
@@ -293,31 +279,36 @@ def test_should_skip_file_normal():
 def test_module_is_imported_exact_match():
     """Test module_is_imported with exact match."""
     all_imports = {"foo", "bar.baz"}
-    assert unused_module_guard._module_is_imported("foo", "foo", all_imports) is True
+    root = Path("src")
+    assert unused_module_guard._module_is_imported("foo", "foo", all_imports, root) is True
 
 
 def test_module_is_imported_stem_match():
     """Test module_is_imported with stem match."""
     all_imports = {"foo", "bar"}
-    assert unused_module_guard._module_is_imported("bar.baz", "baz", all_imports) is True
+    root = Path("src")
+    assert unused_module_guard._module_is_imported("bar.baz", "baz", all_imports, root) is True
 
 
 def test_module_is_imported_partial_match():
     """Test module_is_imported with partial match."""
     all_imports = {"foo.bar"}
-    assert unused_module_guard._module_is_imported("foo.bar.baz", "baz", all_imports) is True
+    root = Path("src")
+    assert unused_module_guard._module_is_imported("foo.bar.baz", "baz", all_imports, root) is True
 
 
 def test_module_is_imported_no_match():
     """Test module_is_imported with no match."""
     all_imports = {"foo", "bar"}
-    assert unused_module_guard._module_is_imported("qux.quux", "quux", all_imports) is False
+    root = Path("src")
+    assert unused_module_guard._module_is_imported("qux.quux", "quux", all_imports, root) is False
 
 
 def test_module_is_imported_empty_name():
     """Test module_is_imported with empty name."""
     all_imports = {"foo"}
-    assert unused_module_guard._module_is_imported("", "file", all_imports) is True
+    root = Path("src")
+    assert unused_module_guard._module_is_imported("", "file", all_imports, root) is True
 
 
 def test_find_unused_modules(tmp_path: Path):
@@ -595,7 +586,8 @@ def test_collect_all_imports_with_parent(tmp_path: Path):
 def test_module_is_imported_with_partial_paths():
     """Test module matching with various partial paths."""
     all_imports = {"foo.bar.baz"}
+    root = Path("src")
 
     # Should match any partial path
-    assert unused_module_guard._module_is_imported("foo.bar.baz.qux", "qux", all_imports) is True
-    assert unused_module_guard._module_is_imported("foo.bar", "bar", all_imports) is True
+    assert unused_module_guard._module_is_imported("foo.bar.baz.qux", "qux", all_imports, root) is True
+    assert unused_module_guard._module_is_imported("foo.bar", "bar", all_imports, root) is True

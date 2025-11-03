@@ -37,6 +37,20 @@ shared-checks:
 	codespell --skip=".git,artifacts,models,node_modules,logs,htmlcov,*.json,*.csv" --quiet-level=2 --ignore-words=$(SHARED_CODESPELL_IGNORE)
 	vulture $(FORMAT_TARGETS) --min-confidence 80
 	deptry --config pyproject.toml $(FORMAT_TARGETS)
+	@# Security checks
+	@if command -v gitleaks >/dev/null 2>&1; then \
+		echo "Running gitleaks secret scan..."; \
+		gitleaks detect --no-git --source . --verbose --exit-code 1; \
+	else \
+		echo "⚠️  gitleaks not installed - skipping secret scan"; \
+		echo "   Install: brew install gitleaks (macOS) or see https://github.com/gitleaks/gitleaks#installing"; \
+	fi
+	$(PYTHON) -m bandit -c pyproject.toml -r $(FORMAT_TARGETS) -q
+	@# Skip safety in CI automation to avoid rate limits, run manually
+	@if [ -z "$(CI_AUTOMATION)" ]; then \
+		echo "Running safety vulnerability scan..."; \
+		$(PYTHON) -m safety scan --json || echo "⚠️  safety scan failed or rate limited"; \
+	fi
 	$(PYTHON) -m ci_tools.scripts.policy_guard
 	$(PYTHON) -m ci_tools.scripts.data_guard
 	$(PYTHON) -m ci_tools.scripts.structure_guard --root $(SHARED_SOURCE_ROOT)

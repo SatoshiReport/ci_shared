@@ -19,9 +19,9 @@ from ci_tools.scripts.policy_collectors_ast import (
     collect_literal_fallbacks,
     collect_long_functions,
     collect_silent_handlers,
-    contains_literal_dataset,
     purge_bytecode_artifacts,
 )
+from ci_tools.scripts.policy_context import contains_literal_dataset
 
 
 def write_module(path: Path, source: str) -> None:

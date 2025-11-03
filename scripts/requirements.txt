@@ -1,0 +1,34 @@
+# CI Tooling Dependencies
+# Install: pip install -r scripts/requirements.txt
+
+# Code Formatting
+black>=24.0.0
+isort>=5.13.0
+
+# Linting & Type Checking
+ruff>=0.3.0
+pylint>=3.0.0
+pyright>=1.1.350
+
+# Testing
+pytest>=8.0.0
+pytest-cov>=4.1.0
+pytest-xdist>=3.5.0
+pytest-asyncio>=0.23.0
+pytest-env>=1.1.0
+
+# Code Quality
+vulture>=2.11
+radon>=6.0.0
+codespell>=2.2.0
+deptry>=0.12.0
+
+# Security
+bandit>=1.7.5
+safety>=3.0.0
+
+# Coverage
+coverage>=7.4.0
+
+# Shared CI Tools (editable install from parent)
+# Note: Run `pip install -e ../ci_shared` from consuming repos

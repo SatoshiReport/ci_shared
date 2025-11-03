@@ -167,15 +167,6 @@ FALSE_POSITIVE_RULES: Tuple[Tuple[str, Iterable[str]], ...] = (
 )
 
 
-def _is_false_positive(stem: str) -> bool:
-    """Check if a stem matches any false positive exclusion markers."""
-    for fp_pattern, exclusions in FALSE_POSITIVE_RULES:
-        for marker in exclusions:
-            if marker in stem:
-                return True
-    return False
-
-
 def _is_false_positive_for_pattern(stem: str, pattern: str) -> bool:
     """Check if a stem matches false positive rules for a specific pattern."""
     for fp_pattern, exclusions in FALSE_POSITIVE_RULES:
@@ -266,13 +257,18 @@ def _should_skip_file(py_file: Path, exclude_patterns: List[str]) -> bool:
     return _is_cli_entry_point(py_file)
 
 
-def _check_exact_match(module_name: str, file_stem: str, all_imports: Set[str]) -> bool:
+def _check_exact_match(
+    module_name: str, file_stem: str, all_imports: Set[str], root: Path
+) -> bool:
     """Check for exact module name matches."""
     if module_name in all_imports:
         return True
     if f"src.{module_name}" in all_imports:
         return True
     if file_stem in all_imports:
+        return True
+    # Check if root directory name is prepended (e.g., ci_tools.scripts.guard_common)
+    if f"{root.name}.{module_name}" in all_imports:
         return True
     return False
 
@@ -311,11 +307,12 @@ def _module_is_imported(
     module_name: str,
     file_stem: str,
     all_imports: Set[str],
+    root: Path,
 ) -> bool:
     if not module_name:
         return True
 
-    if _check_exact_match(module_name, file_stem, all_imports):
+    if _check_exact_match(module_name, file_stem, all_imports, root):
         return True
 
     if _check_child_imported(module_name, all_imports):
@@ -349,7 +346,7 @@ def find_unused_modules(
             continue
 
         module_name = get_module_name(py_file, root)
-        if _module_is_imported(module_name, py_file.stem, all_imports):
+        if _module_is_imported(module_name, py_file.stem, all_imports, root):
             continue
 
         unused.append((py_file, f"Never imported (module: {module_name})"))

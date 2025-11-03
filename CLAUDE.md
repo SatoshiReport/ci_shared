@@ -81,16 +81,23 @@ Key workflow stages:
 - Validates patches don't modify protected CI infrastructure
 - Generates detailed success/failure reports with statistics
 
-**`ci_tools/scripts/ci.sh`**
-- Shared CI shell helper used by consuming repositories
+**`ci_tools/scripts/ci.sh`** (shared CI script)
+- Primary CI entry point used by consuming repositories (Zeus, Kalshi) and ci_shared itself
 - Ensures test dependencies are installed (pytest-cov, ruff, codespell, etc.)
 - Runs `make check` to execute all guards
-- In non-automation mode: stages changes, requests commit message, commits and pushes
+- In non-automation mode: stages changes, requests commit message from Codex, commits and pushes
+- In CI_AUTOMATION mode: runs checks only, skips git operations
+
+**`scripts/ci.sh`** (local wrapper)
+- Thin delegation wrapper that invokes `ci_tools/scripts/ci.sh`
+- Ensures ci_shared uses the exact same CI flow it provides to consuming repositories
+- Supports dogfooding: we test the actual script that Zeus/Kalshi use
 
 ### Guard Scripts
 
 The toolkit includes specialized guard scripts that enforce code quality policies:
 
+**Code Quality Guards:**
 - **`policy_guard.py`**: Enforces code policies (banned keywords, oversized functions, fail-fast violations, broad exception handlers)
 - **`module_guard.py`**: Detects oversized Python modules that need refactoring (default: 600 lines)
 - **`function_size_guard.py`**: Detects oversized functions (default: 150 lines)
@@ -99,9 +106,14 @@ The toolkit includes specialized guard scripts that enforce code quality policie
 - **`dependency_guard.py`**: Validates dependency usage and imports
 - **`method_count_guard.py`**: Limits methods per class
 - **`inheritance_guard.py`**: Enforces inheritance depth limits
-- **`directory_depth_guard.py`**: Limits directory nesting depth
 - **`data_guard.py`**: Validates data handling patterns
 - **`documentation_guard.py`**: Ensures documentation standards
+- **`complexity_guard.py`**: Enforces cyclomatic and cognitive complexity limits
+
+**Security Guards:**
+- **`gitleaks`**: Scans for hardcoded secrets (API keys, tokens, passwords) - external Go binary
+- **`bandit`**: Python security linter (SQL injection, shell injection, etc.)
+- **`safety`**: Dependency vulnerability scanner (checks PyPI against CVE database)
 
 ### Configuration
 

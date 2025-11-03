@@ -8,50 +8,10 @@ import sys
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
-
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Detect oversized functions that should be refactored."
-    )
-    parser.add_argument(
-        "--root",
-        type=Path,
-        help="Directory to scan for Python files (initial: ./src).",
-    )
-    parser.add_argument(
-        "--max-function-lines",
-        type=int,
-        help="Maximum allowed lines per function (initial: 80).",
-    )
-    parser.add_argument(
-        "--exclude",
-        action="append",
-        type=Path,
-        help="Path prefix to exclude from the scan.",
-    )
-    parser.set_defaults(root=Path("src"), max_function_lines=80, exclude=[])
-    return parser.parse_args(list(argv) if argv is not None else None)
-
-
-def iter_python_files(root: Path) -> Iterable[Path]:
-    if not root.exists():
-        raise OSError(f"Path does not exist: {root}")
-    if root.is_file():
-        if root.suffix == ".py":
-            yield root
-        return
-    for candidate in root.rglob("*.py"):
-        yield candidate
-
-
-def is_excluded(path: Path, exclusions: List[Path]) -> bool:
-    for excluded in exclusions:
-        try:
-            if path.is_relative_to(excluded):
-                return True
-        except (ValueError, AttributeError):
-            continue
-    return False
+from ci_tools.scripts.guard_common import (
+    GuardRunner,
+    make_relative_path,
+)
 
 
 def count_function_lines(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
@@ -61,69 +21,81 @@ def count_function_lines(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     return node.end_lineno - node.lineno + 1
 
 
-def scan_file(path: Path, limit: int) -> List[Tuple[str, str, int, int]]:
-    """Return list of (file, function, lineno, line_count) for violations."""
+class FunctionSizeGuard(GuardRunner):
+    """Guard that detects oversized functions."""
+
+    def __init__(self):
+        super().__init__(
+            name="function_size_guard",
+            description="Detect oversized functions that should be refactored.",
+            default_root=Path("src"),
+        )
+
+    def setup_parser(self, parser: argparse.ArgumentParser) -> None:
+        """Add function-specific arguments."""
+        parser.add_argument(
+            "--max-function-lines",
+            type=int,
+            default=80,
+            help="Maximum allowed lines per function (default: 80).",
+        )
+
+    def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
+        """Scan a file for function size violations."""
+        try:
+            content = path.read_text()
+            tree = ast.parse(content, filename=str(path))
+        except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+            print(f"{self.name}: failed to parse {path}: {exc}", file=sys.stderr)
+            return []
+
+        violations: List[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                line_count = count_function_lines(node)
+                if line_count > args.max_function_lines:
+                    relative = make_relative_path(path, self.repo_root)
+                    violations.append(
+                        f"{relative}::{node.name} (line {node.lineno}) contains {line_count} lines "
+                        f"(limit {args.max_function_lines})"
+                    )
+
+        return violations
+
+    def get_violations_header(self, args: argparse.Namespace) -> str:
+        """Get the header for violations report."""
+        return (
+            f"Oversized functions detected. Refactor functions to stay within "
+            f"{args.max_function_lines} lines:"
+        )
+
+
+def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+    """Parse command-line arguments (backward compatibility wrapper)."""
+    guard = FunctionSizeGuard()
+    return guard.parse_args(argv)
+
+
+def scan_file(path: Path, limit: int) -> List[Tuple[Path, str, int, int]]:
+    """Scan a file for function size violations (backward compatibility wrapper)."""
     try:
         content = path.read_text()
         tree = ast.parse(content, filename=str(path))
-    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
-        print(f"function_size_guard: failed to parse {path}: {exc}", file=sys.stderr)
+    except (OSError, UnicodeDecodeError, SyntaxError):
         return []
-
-    violations: List[Tuple[str, str, int, int]] = []
-
+    violations: List[Tuple[Path, str, int, int]] = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             line_count = count_function_lines(node)
             if line_count > limit:
-                violations.append((str(path), node.name, node.lineno, line_count))
-
+                violations.append((path, node.name, node.lineno, line_count))
     return violations
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
-    args = parse_args(argv)
-    root = args.root.resolve()
-    exclusions = [path.resolve() for path in args.exclude]
-    repo_root = Path.cwd()
-
-    all_violations: List[str] = []
-
-    try:
-        file_iter = list(iter_python_files(root))
-    except OSError as exc:
-        print(f"function_size_guard: failed to traverse {root}: {exc}", file=sys.stderr)
-        return 1
-
-    for file_path in file_iter:
-        resolved = file_path.resolve()
-        if is_excluded(resolved, exclusions):
-            continue
-
-        file_violations = scan_file(resolved, args.max_function_lines)
-
-        for file_str, func_name, lineno, line_count in file_violations:
-            try:
-                relative = Path(file_str).resolve().relative_to(repo_root)
-            except ValueError:
-                relative = Path(file_str)
-
-            all_violations.append(
-                f"{relative}::{func_name} (line {lineno}) contains {line_count} lines "
-                f"(limit {args.max_function_lines})"
-            )
-
-    if all_violations:
-        header = (
-            f"Oversized functions detected. Refactor functions to stay within "
-            f"{args.max_function_lines} lines:"
-        )
-        print(header, file=sys.stderr)
-        for violation in sorted(all_violations):
-            print(f"  - {violation}", file=sys.stderr)
-        return 1
-
-    return 0
+    """Main entry point for function_size_guard."""
+    guard = FunctionSizeGuard()
+    return guard.run(argv)
 
 
 if __name__ == "__main__":
