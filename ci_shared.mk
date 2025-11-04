@@ -70,7 +70,7 @@ shared-checks:
 	@# Skip safety in CI automation to avoid rate limits, run manually
 	@if [ -z "$(CI_AUTOMATION)" ]; then \
 		echo "Running safety vulnerability scan..."; \
-		$(PYTHON) -m safety scan --json || echo "⚠️  safety scan failed or rate limited"; \
+		$(PYTHON) -m safety scan --json --cache tail || echo "⚠️  safety scan failed or rate limited"; \
 	fi
 	$(PYTHON) -m ci_tools.scripts.policy_guard
 	$(PYTHON) -m ci_tools.scripts.data_guard
