@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from ci_tools.scripts.guard_common import parse_python_ast, relative_path
-from ci_tools.scripts.policy_collectors_ast import _resolve_default_argument
+from ci_tools.scripts.policy_visitors import _resolve_default_argument
 from ci_tools.scripts.policy_context import (
     BANNED_KEYWORDS,
     BROAD_EXCEPT_SUPPRESSION,

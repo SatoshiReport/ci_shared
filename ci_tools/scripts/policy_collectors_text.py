@@ -58,6 +58,7 @@ def _keyword_token_lines(
 
 
 def scan_keywords() -> Dict[str, Dict[str, List[int]]]:
+    """Scan for banned keywords in source files."""
     found: Dict[str, Dict[str, List[int]]] = {kw: {} for kw in BANNED_KEYWORDS}
     keyword_lookup = {kw.lower(): kw for kw in BANNED_KEYWORDS}
 
@@ -95,10 +96,12 @@ def _collect_line_tokens(token_list: List[str]) -> List[Tuple[str, int, str]]:
 
 
 def collect_flagged_tokens() -> List[Tuple[str, int, str]]:
+    """Collect flagged comment tokens (TODO, FIXME, HACK, etc.)."""
     return _collect_line_tokens(list(FLAGGED_TOKENS))
 
 
 def collect_suppressions() -> List[Tuple[str, int, str]]:
+    """Collect suppression comment patterns (# noqa, pylint: disable)."""
     return _collect_line_tokens(list(SUPPRESSION_PATTERNS))
 
 
@@ -118,6 +121,7 @@ def _has_legacy_pattern(
 
 
 def collect_legacy_modules() -> List[Tuple[str, int, str]]:
+    """Collect legacy/deprecated module patterns."""
     records: List[Tuple[str, int, str]] = []
     for ctx in iter_module_contexts():
         if _should_skip_path(ctx.rel_path):
@@ -129,6 +133,7 @@ def collect_legacy_modules() -> List[Tuple[str, int, str]]:
 
 
 def collect_legacy_configs() -> List[Tuple[str, int, str]]:
+    """Collect legacy configuration patterns."""
     records: List[Tuple[str, int, str]] = []
     config_root = ROOT / "config"
     if not config_root.exists():

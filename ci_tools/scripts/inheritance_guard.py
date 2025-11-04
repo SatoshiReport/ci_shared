@@ -105,7 +105,10 @@ class InheritanceGuard(GuardRunner):
             "--max-depth",
             type=int,
             default=2,
-            help="Maximum allowed inheritance depth (default: 2, meaning class → parent → grandparent).",
+            help=(
+                "Maximum allowed inheritance depth "
+                "(default: 2, meaning class → parent → grandparent)."
+            ),
         )
 
     def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:

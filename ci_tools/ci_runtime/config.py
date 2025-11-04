@@ -91,6 +91,7 @@ def resolve_model_choice(
     Raises:
         ValueError: If validate=True and model doesn't match REQUIRED_MODEL
     """
+    # pylint: disable=import-outside-toplevel
     from ci_tools.ci_runtime.models import ModelSelectionAbort
 
     candidate = model_arg or os.environ.get("OPENAI_MODEL") or REQUIRED_MODEL
@@ -117,6 +118,7 @@ def resolve_reasoning_choice(
     Raises:
         ValueError: If validate=True and choice is not in REASONING_EFFORT_CHOICES
     """
+    # pylint: disable=import-outside-toplevel
     from ci_tools.ci_runtime.models import ReasoningEffortAbort
 
     env_reasoning = os.environ.get("OPENAI_REASONING_EFFORT")

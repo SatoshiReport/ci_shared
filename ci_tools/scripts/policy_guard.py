@@ -17,9 +17,11 @@ __all__ = ["PolicyViolation", "purge_bytecode_artifacts", "main"]
 
 
 def main() -> int:  # pragma: no cover - thin wrapper
+    """Run policy checks and return exit code."""
     return _run_policy_checks()
 
 
+# pylint: disable=duplicate-code
 if __name__ == "__main__":  # pragma: no cover
     try:
         sys.exit(main())

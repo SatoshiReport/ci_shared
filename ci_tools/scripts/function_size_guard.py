@@ -44,7 +44,9 @@ class FunctionSizeGuard(GuardRunner):
 
         violations: List[str] = []
         for node in iter_ast_nodes(tree, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            assert isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))  # Type narrowing
+            assert isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef)
+            )  # Type narrowing
             line_count = count_ast_node_lines(node)
             if line_count > args.max_function_lines:
                 rel_path = relative_path(path, self.repo_root)

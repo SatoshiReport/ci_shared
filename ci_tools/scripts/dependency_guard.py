@@ -104,6 +104,7 @@ class DependencyGuard(GuardRunner):
                 )
         return None
 
+    # pylint: disable=duplicate-code
     def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
         """Scan a file for dependency instantiation violations."""
         tree = parse_python_ast(path)
@@ -124,7 +125,10 @@ class DependencyGuard(GuardRunner):
 
     def get_violations_footer(self, args: argparse.Namespace) -> Optional[str]:
         """Get the footer tip for violations report."""
-        return "Tip: Pass dependencies via __init__ parameters instead of instantiating them internally"
+        return (
+            "Tip: Pass dependencies via __init__ parameters "
+            "instead of instantiating them internally"
+        )
 
 
 if __name__ == "__main__":

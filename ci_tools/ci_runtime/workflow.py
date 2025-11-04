@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import shlex
 import sys
 from pathlib import Path
@@ -22,9 +21,7 @@ from .failures import build_failure_context
 from .messaging import commit_and_push, request_commit_message
 from .models import (
     CiAbort,
-    ModelSelectionAbort,
     PatchLifecycleAbort,
-    ReasoningEffortAbort,
     RuntimeOptions,
 )
 from .patch_cycle import request_and_apply_patches

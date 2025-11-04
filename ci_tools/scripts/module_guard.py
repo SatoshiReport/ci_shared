@@ -44,7 +44,9 @@ class ModuleGuard(GuardRunner):
                 str(exc).replace("failed to parse", "failed to read")
             ) from exc.__cause__
 
-        assert tree is not None  # parse_python_ast raises on error when raise_on_error=True
+        assert (
+            tree is not None
+        )  # parse_python_ast raises on error when raise_on_error=True
         line_count = count_significant_lines(tree)
         if line_count > args.max_module_lines:
             rel_path = relative_path(path, self.repo_root)

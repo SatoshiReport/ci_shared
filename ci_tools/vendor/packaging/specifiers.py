@@ -1,5 +1,7 @@
 """Minimal subset of packaging.specifiers used by the CI tooling."""
 
+# pylint: disable=duplicate-code
+
 from __future__ import annotations
 
 import re

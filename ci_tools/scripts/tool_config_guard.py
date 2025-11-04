@@ -121,7 +121,7 @@ def _compare_tool_section(shared: Any, repo: Any, path: str) -> list[str]:
 
 def _format_toml_list(key: str, value: list, indent_str: str) -> list[str]:
     """Format a list value as TOML."""
-    import json
+    import json  # pylint: disable=import-outside-toplevel
 
     if len(value) == 0:
         return [f"{indent_str}{key} = []"]
@@ -206,7 +206,8 @@ def _print_tool_section(tool_name: str, tool_config: dict[str, Any]) -> None:
 
 
 def print_tool_config_diff(
-    shared_data: dict[str, Any], repo_data: dict[str, Any]
+    shared_data: dict[str, Any],
+    repo_data: dict[str, Any],  # pylint: disable=unused-argument
 ) -> None:
     """Print the tool configuration that should be in pyproject.toml."""
     print("\n" + "=" * 70)
@@ -234,25 +235,25 @@ def sync_configs(shared_config_path: Path, repo_pyproject_path: Path) -> bool:
     try:
         shared_data = load_toml(shared_config_path)
         repo_data = load_toml(repo_pyproject_path)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error displaying sync instructions: {e}", file=sys.stderr)
         return False
-    else:
-        print("\n" + "!" * 70)
-        print("SYNC MODE: Manual steps required")
-        print("!" * 70)
-        print(f"\n1. Open {repo_pyproject_path}")
-        print("2. Remove all existing [tool.*] sections")
-        print("3. Copy the following configuration to the end of the file:")
 
-        print_tool_config_diff(shared_data, repo_data)
+    print("\n" + "!" * 70)
+    print("SYNC MODE: Manual steps required")
+    print("!" * 70)
+    print(f"\n1. Open {repo_pyproject_path}")
+    print("2. Remove all existing [tool.*] sections")
+    print("3. Copy the following configuration to the end of the file:")
 
-        print("=" * 70)
-        print("\nAlternative: Copy directly from shared-tool-config.toml")
-        print(f"  File location: {shared_config_path}")
-        print("=" * 70)
+    print_tool_config_diff(shared_data, repo_data)
 
-        return True
+    print("=" * 70)
+    print("\nAlternative: Copy directly from shared-tool-config.toml")
+    print(f"  File location: {shared_config_path}")
+    print("=" * 70)
+
+    return True
 
 
 def _find_shared_config(repo_root: Path, shared_config: Path | None) -> Path:
@@ -293,8 +294,10 @@ def _handle_config_mismatch(
     shared_config_path: Path,
 ) -> int:
     """Handle case where configs don't match."""
+    status_icon = "✓" if sync_mode else "✗"
     print(
-        f"{'✓' if sync_mode else '✗'} Tool configurations in {repo_pyproject.name} differ from shared config:"
+        f"{status_icon} Tool configurations in {repo_pyproject.name} "
+        f"differ from shared config:"
     )
     for diff in differences:
         print(f"  - {diff}")
@@ -308,6 +311,7 @@ def _handle_config_mismatch(
 
 
 def main() -> int:
+    """Main entry point for tool config guard."""
     parser = argparse.ArgumentParser(
         description="Validate or sync tool configurations across repositories"
     )
@@ -340,7 +344,7 @@ def main() -> int:
     try:
         shared_data = load_toml(shared_config_path)
         repo_data = load_toml(repo_pyproject)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error loading TOML files: {e}", file=sys.stderr)
         return 2
 

@@ -19,7 +19,7 @@ import argparse
 import ast
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from ci_tools.scripts.guard_common import (
     iter_ast_nodes,
@@ -28,7 +28,7 @@ from ci_tools.scripts.guard_common import (
 )
 
 
-class ImportCollector(ast.NodeVisitor):
+class ImportCollector(ast.NodeVisitor):  # pylint: disable=invalid-name
     """Collects all import statements from a Python file."""
 
     def __init__(self, file_path: Optional[Path] = None, root: Optional[Path] = None):
@@ -36,7 +36,7 @@ class ImportCollector(ast.NodeVisitor):
         self.file_path = file_path
         self.root = root
 
-    def visit_Import(self, node: ast.Import) -> None:
+    def visit_Import(self, node: ast.Import) -> None:  # pylint: disable=invalid-name
         """Visit 'import foo' statements."""
         for alias in node.names:
             # Add full module path and all parent modules
@@ -90,6 +90,7 @@ class ImportCollector(ast.NodeVisitor):
             if alias.name != "*":
                 self.imports.add(f"{module}.{alias.name}")
 
+    # pylint: disable=invalid-name
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Visit 'from foo import bar' statements."""
         if node.module is None and node.level > 0:
@@ -216,6 +217,36 @@ def _collect_all_imports_with_parent(root: Path) -> Set[str]:
     return imports
 
 
+def _is_main_guard_node(node: ast.If) -> bool:
+    """Check if an If node is a '__name__ == "__main__"' guard."""
+    if not isinstance(node.test, ast.Compare):
+        return False
+    if not isinstance(node.test.left, ast.Name):
+        return False
+    if node.test.left.id != "__name__":
+        return False
+    if len(node.test.comparators) != 1:
+        return False
+    comparator = node.test.comparators[0]
+    return isinstance(comparator, ast.Constant) and comparator.value == "__main__"
+
+
+def _has_main_function(tree: ast.AST) -> bool:
+    """Check if AST contains a main() function definition."""
+    return any(
+        isinstance(node, ast.FunctionDef) and node.name == "main"
+        for node in iter_ast_nodes(tree, ast.FunctionDef)
+    )
+
+
+def _has_main_guard(tree: ast.AST) -> bool:
+    """Check if AST contains if __name__ == '__main__' pattern."""
+    return any(
+        isinstance(node, ast.If) and _is_main_guard_node(node)
+        for node in iter_ast_nodes(tree, ast.If)
+    )
+
+
 def _is_cli_entry_point(py_file: Path) -> bool:
     """
     Check if a file is a CLI entry point (has main() and if __name__ == "__main__").
@@ -227,25 +258,7 @@ def _is_cli_entry_point(py_file: Path) -> bool:
     if tree is None:
         return False
 
-    # Check for main() function definition
-    has_main_function = any(
-        isinstance(node, ast.FunctionDef) and node.name == "main"
-        for node in iter_ast_nodes(tree, ast.FunctionDef)
-    )
-
-    # Check for if __name__ == "__main__": pattern in AST
-    has_main_guard = any(
-        isinstance(node, ast.If)
-        and isinstance(node.test, ast.Compare)
-        and isinstance(node.test.left, ast.Name)
-        and node.test.left.id == "__name__"
-        and len(node.test.comparators) == 1
-        and isinstance(node.test.comparators[0], ast.Constant)
-        and node.test.comparators[0].value == "__main__"
-        for node in iter_ast_nodes(tree, ast.If)
-    )
-
-    return has_main_guard and has_main_function
+    return _has_main_guard(tree) and _has_main_function(tree)
 
 
 def _should_skip_file(py_file: Path, exclude_patterns: List[str]) -> bool:

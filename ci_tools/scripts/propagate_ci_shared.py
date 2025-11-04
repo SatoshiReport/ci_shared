@@ -163,7 +163,7 @@ def _process_repositories(
                 updated.append(repo_name)
             else:
                 skipped.append(repo_name)
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"❌ Error updating {repo_name}: {e}", file=sys.stderr)
             failed.append(repo_name)
 

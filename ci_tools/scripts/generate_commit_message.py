@@ -12,6 +12,7 @@ from ci_tools.ci_runtime.config import resolve_model_choice, resolve_reasoning_c
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments for commit message generation."""
     parser = argparse.ArgumentParser(description="Generate a commit message via Codex")
     parser.add_argument("--model", help="Model name to pass to Codex")
     parser.add_argument(
@@ -59,10 +60,11 @@ def _write_payload(payload: str, output_path: Path | None) -> int | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Main entry point for commit message generation."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
     # Use CI_COMMIT_* env vars if available, falling back to shared resolution
-    import os
+    import os  # pylint: disable=import-outside-toplevel
 
     model_arg = args.model or os.environ.get("CI_COMMIT_MODEL")
     reasoning_arg = args.reasoning or os.environ.get("CI_COMMIT_REASONING")
@@ -85,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             extra_context="",
             detailed=args.detailed,
         )
+    # pylint: disable=broad-exception-caught
     except Exception as exc:  # pragma: no cover - defensive guardrail
         print(f"Codex commit message request failed: {exc}", file=sys.stderr)
         return 1

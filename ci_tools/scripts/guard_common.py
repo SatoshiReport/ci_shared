@@ -44,8 +44,7 @@ def iter_python_files(root: Union[Path, Sequence[Path]]) -> Iterable[Path]:
         if root.suffix == ".py":
             yield root
         return
-    for candidate in root.rglob("*.py"):
-        yield candidate
+    yield from root.rglob("*.py")
 
 
 def parse_python_ast(path: Path, *, raise_on_error: bool = True) -> ast.AST | None:
@@ -335,7 +334,10 @@ def report_violations(
 
 
 class GuardRunner(ABC):
-    """Base class for guard scripts. Subclasses implement setup_parser(), scan_file(), get_violations_header()."""
+    """Base class for guard scripts.
+
+    Subclasses implement setup_parser(), scan_file(), get_violations_header().
+    """
 
     def __init__(self, name: str, description: str, default_root: Path = Path("src")):
         self.name, self.description, self.default_root = name, description, default_root
@@ -344,22 +346,22 @@ class GuardRunner(ABC):
     @abstractmethod
     def setup_parser(self, parser: argparse.ArgumentParser) -> None:
         """Add script-specific arguments."""
-        pass
 
     @abstractmethod
     def scan_file(self, path: Path, args: argparse.Namespace) -> List[str]:
         """Return list of violation messages for this file."""
-        pass
 
     @abstractmethod
     def get_violations_header(self, args: argparse.Namespace) -> str:
         """Return header message for violations report."""
-        pass
 
+    # pylint: disable=unused-argument
     def get_violations_footer(self, args: argparse.Namespace) -> Optional[str]:
+        """Return optional footer message for violations report."""
         return None
 
     def parse_args(self, argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+        """Parse command-line arguments for this guard script."""
         parser = create_guard_parser(self.description, self.default_root)
         self.setup_parser(parser)
         return parser.parse_args(list(argv) if argv is not None else None)
@@ -403,5 +405,5 @@ class GuardRunner(ABC):
         Returns:
             Exit code: 0 if no violations, 1 otherwise
         """
-        guard = cls()  # type: ignore[call-arg]  # Subclasses have no-arg __init__
+        guard = cls()  # type: ignore[call-arg]  # pylint: disable=no-value-for-parameter
         return guard.run(argv)

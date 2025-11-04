@@ -63,6 +63,8 @@ BROAD_EXCEPTION_NAMES = {"Exception", "BaseException"}
 
 @dataclass(frozen=True)
 class FunctionEntry:
+    """Represents a function with its location and size metrics."""
+
     path: Path
     name: str
     lineno: int
@@ -71,6 +73,8 @@ class FunctionEntry:
 
 @dataclass
 class ModuleContext:
+    """Represents a Python module with its AST and optional source text."""
+
     path: Path
     rel_path: str
     tree: ast.AST
@@ -78,13 +82,18 @@ class ModuleContext:
     lines: Optional[List[str]] = None
 
 
-class FunctionNormalizer(ast.NodeTransformer):
+class FunctionNormalizer(ast.NodeTransformer):  # pylint: disable=invalid-name
+    """Normalizes function ASTs for structural comparison by replacing names and constants."""
+
+    # pylint: disable=invalid-name
     def visit_Name(self, node: ast.Name) -> ast.AST:  # pragma: no cover - trivial
+        """Normalize variable names to 'var'."""
         ctx = node.ctx.__class__()
         new_node = ast.Name(id="var", ctx=ctx)
         return ast.copy_location(new_node, node)
 
     def visit_arg(self, node: ast.arg) -> ast.AST:  # pragma: no cover - trivial
+        """Normalize argument names to 'arg'."""
         annotation = self.visit(node.annotation) if node.annotation else None
         new_node = ast.arg(arg="arg", annotation=annotation)
         return ast.copy_location(new_node, node)
@@ -97,6 +106,7 @@ class FunctionNormalizer(ast.NodeTransformer):
 
 
 def normalize_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """Normalize a function AST for structural comparison."""
     clone = deepcopy(node)
     if (
         clone.body
@@ -142,6 +152,7 @@ def iter_module_contexts(
     include_source: bool = False,
     include_lines: bool = False,
 ) -> Iterator[ModuleContext]:
+    """Iterate over Python modules in the specified bases, yielding ModuleContext objects."""
     if bases is None:
         bases = _determine_default_bases()
 
@@ -166,6 +177,7 @@ def iter_module_contexts(
 
 
 def get_call_qualname(node: ast.AST) -> str | None:
+    """Extract the qualified name from a Call node (e.g., 'module.function')."""
     if isinstance(node, ast.Name):
         return node.id
     if isinstance(node, ast.Attribute):
@@ -185,6 +197,7 @@ def _sequence_element_has_literal(elt: ast.AST) -> bool:
 
 
 def contains_literal_dataset(node: ast.AST) -> bool:
+    """Check if a node contains literal data (numbers, strings) in collections."""
     if isinstance(node, ast.Dict):
         return any(contains_literal_dataset(value) for value in node.values)
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
@@ -193,12 +206,14 @@ def contains_literal_dataset(node: ast.AST) -> bool:
 
 
 def is_non_none_literal(node: ast.AST | None) -> bool:
+    """Check if a node is a non-None literal constant."""
     if isinstance(node, ast.Constant):
         return node.value is not None
     return False
 
 
 def is_logging_call(node: ast.AST) -> bool:
+    """Check if a node is a logging call (e.g., logging.info, logging.error)."""
     if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
         qualname = get_call_qualname(node.value.func)
         if qualname and qualname.startswith("logging."):
@@ -207,6 +222,7 @@ def is_logging_call(node: ast.AST) -> bool:
 
 
 def handler_has_raise(handler: ast.ExceptHandler) -> bool:
+    """Check if an exception handler contains a raise statement."""
     for stmt in handler.body:
         for inner in ast.walk(stmt):
             if isinstance(inner, ast.Raise):
@@ -215,6 +231,7 @@ def handler_has_raise(handler: ast.ExceptHandler) -> bool:
 
 
 def classify_handler(handler: ast.ExceptHandler) -> str | None:
+    """Classify an exception handler as potentially problematic or None if acceptable."""
     if handler_has_raise(handler):
         return None
     if not handler.body:
@@ -231,6 +248,7 @@ def classify_handler(handler: ast.ExceptHandler) -> str | None:
 
 
 def is_literal_none_guard(test: ast.AST) -> bool:
+    """Check if a test expression is a None comparison (e.g., 'x is None', 'x == None')."""
     if (
         isinstance(test, ast.Compare)
         and len(test.ops) == 1
@@ -248,6 +266,7 @@ def handler_contains_suppression(
     lines: Sequence[str],
     token: str,
 ) -> bool:
+    """Check if an exception handler contains a suppression comment token."""
     if not lines:
         return False
     header_start = max(handler.lineno - 1, 0)

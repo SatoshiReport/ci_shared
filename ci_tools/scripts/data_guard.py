@@ -98,12 +98,15 @@ class DataGuardViolation(Exception):
 
 @dataclass(frozen=True)
 class Violation:
+    """Represents a data guard policy violation."""
+
     path: Path
     lineno: int
     message: str
 
 
 def extract_target_names(target: ast.AST) -> Iterable[str]:
+    """Extract variable names from assignment targets."""
     if isinstance(target, ast.Name):
         yield target.id
     elif isinstance(target, ast.Tuple):
@@ -123,10 +126,12 @@ def _is_all_caps_identifier(name: str) -> bool:
 
 
 def is_numeric_constant(node: ast.AST | None) -> TypeGuard[ast.Constant]:
+    """Check if a node is a numeric constant."""
     return isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
 
 
 def literal_value_repr(node: ast.AST | None) -> str:
+    """Get string representation of a literal value."""
     if isinstance(node, ast.Constant):
         return repr(node.value)
     return ast.dump(node) if node is not None else "None"
@@ -231,6 +236,7 @@ def _collect_violations_from_iterator(
 
 
 def collect_sensitive_assignments() -> List[Violation]:
+    """Collect violations for assignments with sensitive data patterns."""
     return _collect_violations_from_iterator(_iter_sensitive_assignment_violations)
 
 
@@ -258,6 +264,7 @@ def _iter_dataframe_literal_violations(
 
 
 def collect_dataframe_literals() -> List[Violation]:
+    """Collect violations for DataFrame operations with literal values."""
     return _collect_violations_from_iterator(_iter_dataframe_literal_violations)
 
 
@@ -308,10 +315,12 @@ def _iter_numeric_comparison_violations(
 
 
 def collect_numeric_comparisons() -> List[Violation]:
+    """Collect violations for numeric comparisons with literal values."""
     return _collect_violations_from_iterator(_iter_numeric_comparison_violations)
 
 
 def collect_all_violations() -> List[Violation]:
+    """Collect all data guard violations."""
     violations: List[Violation] = []
     violations.extend(collect_sensitive_assignments())
     violations.extend(collect_dataframe_literals())
@@ -320,6 +329,7 @@ def collect_all_violations() -> List[Violation]:
 
 
 def main() -> int:
+    """Main entry point for data guard."""
     violations = sorted(
         collect_all_violations(),
         key=lambda item: (

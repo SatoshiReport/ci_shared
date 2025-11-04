@@ -47,6 +47,7 @@ class MethodCountGuard(GuardRunner):
             help="Maximum allowed total methods (public + private) per class (default: 25).",
         )
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _build_violation(
         self,
         path: Path,
@@ -77,6 +78,8 @@ class MethodCountGuard(GuardRunner):
             if violation := self._build_violation(path, node, pub, tot, args):
                 violations.append(violation)
         return violations
+
+    # pylint: enable=duplicate-code
 
     def get_violations_header(self, args: argparse.Namespace) -> str:
         """Get the header for violations report."""

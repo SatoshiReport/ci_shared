@@ -20,12 +20,15 @@ ROOT = detect_repo_root()
 
 @dataclass(frozen=True)
 class CoverageResult:
+    """Represents coverage results for a single file."""
+
     path: Path
     statements: int
     missing: int
 
     @property
     def percent(self) -> float:
+        """Calculate coverage percentage."""
         if self.statements == 0:
             return 100.0
         covered = self.statements - self.missing
@@ -33,6 +36,7 @@ class CoverageResult:
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    """Parse command-line arguments for coverage guard."""
     parser = argparse.ArgumentParser(
         description="Fail when any measured file falls below the coverage threshold."
     )
@@ -59,6 +63,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def resolve_data_file(candidate: str | None) -> Path:
+    """Resolve the coverage data file path."""
     raw = candidate or os.environ.get("COVERAGE_FILE") or ".coverage"
     path = Path(raw)
     if not path.is_absolute():
@@ -67,6 +72,7 @@ def resolve_data_file(candidate: str | None) -> Path:
 
 
 def normalize_prefixes(prefixes: Iterable[str]) -> List[Path]:
+    """Normalize file path prefixes to absolute paths."""
     paths: List[Path] = []
     for prefix in prefixes:
         candidate = (ROOT / prefix).resolve()
@@ -75,6 +81,7 @@ def normalize_prefixes(prefixes: Iterable[str]) -> List[Path]:
 
 
 def should_include(path: Path, prefixes: Sequence[Path]) -> bool:
+    """Check if a path should be included based on prefixes."""
     try:
         path.relative_to(ROOT)
     except ValueError:
@@ -88,6 +95,7 @@ def should_include(path: Path, prefixes: Sequence[Path]) -> bool:
 
 
 def collect_results(cov: Coverage, prefixes: Sequence[Path]) -> List[CoverageResult]:
+    """Collect coverage results for files matching the given prefixes."""
     try:
         cov.load()
     except NoDataError as exc:
@@ -116,6 +124,7 @@ def collect_results(cov: Coverage, prefixes: Sequence[Path]) -> List[CoverageRes
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Main entry point for coverage guard."""
     args = parse_args(argv or sys.argv[1:])
     data_file = resolve_data_file(args.data_file)
     if not data_file.exists():

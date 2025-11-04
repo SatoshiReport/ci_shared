@@ -36,6 +36,7 @@ class PolicyViolation(Exception):
 
 
 def enforce_occurrences(discovered: List[Tuple[str, int]], message: str) -> None:
+    """Raise PolicyViolation if any occurrences are found."""
     if not discovered:
         return
     violations = [f"{path}:{lineno} -> {message}" for path, lineno in discovered]
@@ -45,6 +46,7 @@ def enforce_occurrences(discovered: List[Tuple[str, int]], message: str) -> None
 
 
 def enforce_duplicate_functions(duplicates: List[List[FunctionEntry]]) -> None:
+    """Raise PolicyViolation if duplicate function implementations are found."""
     if not duplicates:
         return
     messages: List[str] = []
@@ -90,10 +92,12 @@ def _check_function_lengths() -> None:
 def enforce_function_lengths(
     found: List[FunctionEntry], threshold: int = FUNCTION_LENGTH_THRESHOLD
 ) -> None:
+    """Raise PolicyViolation if any functions exceed the length threshold."""
     if not found:
         return
     violations = [
-        f"{entry.path}:{entry.lineno} -> function '{entry.name}' length {entry.length} exceeds {threshold}"
+        f"{entry.path}:{entry.lineno} -> function '{entry.name}' "
+        f"length {entry.length} exceeds {threshold}"
         for entry in found
     ]
     raise PolicyViolation(

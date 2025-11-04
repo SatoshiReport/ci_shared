@@ -19,6 +19,7 @@ from typing import Callable, List, Tuple
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments for documentation guard."""
     parser = argparse.ArgumentParser(
         description="Verify required documentation exists. FAIL on missing required docs."
     )
@@ -289,6 +290,7 @@ def _print_success(total_docs: int) -> None:
 
 
 def main() -> int:
+    """Main entry point for documentation guard."""
     args = parse_args()
     root = args.root.resolve()
 
