@@ -42,7 +42,7 @@ def get_latest_commit_message(repo_path: Path) -> str:
 
 
 def _validate_repo_state(repo_path: Path, repo_name: str) -> bool:
-    """Check if repo and submodule exist, and no uncommitted changes."""
+    """Check if repo and submodule exist, auto-commit any uncommitted changes."""
     if not repo_path.exists():
         print(f"⚠️  Repository not found: {repo_path}")
         return False
@@ -58,9 +58,31 @@ def _validate_repo_state(repo_path: Path, repo_name: str) -> bool:
         check=False,
     )
     if result.stdout.strip():
-        print(f"⚠️  {repo_name} has uncommitted changes, skipping update")
-        print(f"   Run 'cd {repo_path} && git status' to see changes")
-        return False
+        print(f"📝 {repo_name} has uncommitted changes, committing automatically...")
+
+        # Stage all changes
+        run_command(["git", "add", "-A"], cwd=repo_path, check=False)
+
+        # Create commit message
+        commit_msg = """Auto-commit before ci_shared update
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"""
+
+        # Commit changes
+        commit_result = run_command(
+            ["git", "commit", "-m", commit_msg],
+            cwd=repo_path,
+            check=False,
+        )
+
+        if commit_result.returncode != 0:
+            print(f"⚠️  Failed to commit changes in {repo_name}")
+            print(f"   Error: {commit_result.stderr}")
+            return False
+
+        print(f"✓ Successfully committed changes in {repo_name}")
 
     return True
 

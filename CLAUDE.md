@@ -226,6 +226,7 @@ After `scripts/ci.sh` successfully pushes ci_shared changes:
 
 1. **`propagate_ci_shared.py`** automatically runs
 2. For each consuming repo (zeus, kalshi, aws):
+   - **Automatically commits any uncommitted changes** (if present)
    - Updates the ci_shared submodule to the latest commit
    - Creates a commit: "Update ci_shared submodule"
    - Pushes the change to the remote
@@ -261,6 +262,6 @@ git push
 ### Skipping Auto-Propagation
 
 Auto-propagation is skipped if:
-- A consuming repo has uncommitted changes
 - The submodule is already up to date
 - The consuming repo is not found
+- Auto-commit of existing changes fails (rare)

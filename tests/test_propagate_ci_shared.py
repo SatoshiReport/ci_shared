@@ -90,18 +90,70 @@ def test_validate_repo_state_missing_submodule(tmp_path):
 
 
 def test_validate_repo_state_uncommitted_changes(tmp_path):
-    """Test _validate_repo_state with uncommitted changes."""
+    """Test _validate_repo_state auto-commits uncommitted changes."""
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     (repo_path / "ci_shared").mkdir()
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["git", "status"],
-            returncode=0,
-            stdout=" M file.py\n",
-            stderr="",
-        )
+        mock_run.side_effect = [
+            # git status --porcelain (shows uncommitted changes)
+            subprocess.CompletedProcess(
+                args=["git", "status"],
+                returncode=0,
+                stdout=" M file.py\n",
+                stderr="",
+            ),
+            # git add -A
+            subprocess.CompletedProcess(
+                args=["git", "add"],
+                returncode=0,
+                stdout="",
+                stderr="",
+            ),
+            # git commit
+            subprocess.CompletedProcess(
+                args=["git", "commit"],
+                returncode=0,
+                stdout="",
+                stderr="",
+            ),
+        ]
+        result = _validate_repo_state(repo_path, "repo")
+        assert result is True
+        assert mock_run.call_count == 3
+
+
+def test_validate_repo_state_commit_failure(tmp_path):
+    """Test _validate_repo_state handles commit failure."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "ci_shared").mkdir()
+
+    with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
+        mock_run.side_effect = [
+            # git status --porcelain (shows uncommitted changes)
+            subprocess.CompletedProcess(
+                args=["git", "status"],
+                returncode=0,
+                stdout=" M file.py\n",
+                stderr="",
+            ),
+            # git add -A
+            subprocess.CompletedProcess(
+                args=["git", "add"],
+                returncode=0,
+                stdout="",
+                stderr="",
+            ),
+            # git commit (fails)
+            subprocess.CompletedProcess(
+                args=["git", "commit"],
+                returncode=1,
+                stdout="",
+                stderr="commit failed",
+            ),
+        ]
         result = _validate_repo_state(repo_path, "repo")
         assert result is False
 
