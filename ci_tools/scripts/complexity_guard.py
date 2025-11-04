@@ -40,50 +40,57 @@ def calculate_cognitive_complexity(node: ast.FunctionDef) -> int:
     """
 
     class CognitiveComplexityVisitor(ast.NodeVisitor):
+        """AST visitor that calculates cognitive complexity of a function."""
+
         def __init__(self):
             self.complexity = 0
             self.nesting_level = 0
 
-        def visit_If(self, node):
+        def visit_If(self, node):  # pylint: disable=invalid-name
+            """Visit If node and increment complexity based on nesting level."""
             self.complexity += 1 + self.nesting_level
             self.nesting_level += 1
             self.generic_visit(node)
             self.nesting_level -= 1
 
-        def visit_While(self, node):
+        def visit_While(self, node):  # pylint: disable=invalid-name
+            """Visit While node and increment complexity based on nesting level."""
             self.complexity += 1 + self.nesting_level
             self.nesting_level += 1
             self.generic_visit(node)
             self.nesting_level -= 1
 
-        def visit_For(self, node):
+        def visit_For(self, node):  # pylint: disable=invalid-name
+            """Visit For node and increment complexity based on nesting level."""
             self.complexity += 1 + self.nesting_level
             self.nesting_level += 1
             self.generic_visit(node)
             self.nesting_level -= 1
 
-        def visit_ExceptHandler(self, node):
+        def visit_ExceptHandler(self, node):  # pylint: disable=invalid-name
+            """Visit ExceptHandler node and increment complexity based on nesting level."""
             self.complexity += 1 + self.nesting_level
             self.nesting_level += 1
             self.generic_visit(node)
             self.nesting_level -= 1
 
-        def visit_BoolOp(self, node):
+        def visit_BoolOp(self, node):  # pylint: disable=invalid-name
+            """Visit BoolOp node and add complexity for each boolean condition."""
             # Each additional condition in a boolean expression adds complexity
             if isinstance(node.op, (ast.And, ast.Or)):
                 self.complexity += len(node.values) - 1
             self.generic_visit(node)
 
-        def visit_Lambda(self, node):
+        def visit_Lambda(self, node):  # pylint: disable=invalid-name
+            """Visit Lambda node without counting nested lambdas as they're separate units."""
             # Don't count nested lambdas - they're separate cognitive units
-            pass
 
     visitor = CognitiveComplexityVisitor()
     visitor.visit(node)
     return visitor.complexity
 
 
-def check_file_complexity(
+def check_file_complexity(  # pylint: disable=too-many-locals
     file_path: Path, max_cyclomatic: int, max_cognitive: int
 ) -> list[ComplexityViolation]:
     """Check complexity for all functions in a file."""
