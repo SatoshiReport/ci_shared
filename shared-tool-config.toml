@@ -52,7 +52,12 @@ omit = [
 # Skip checks that are expected/acceptable in our codebase
 skips = [
     "B101",  # assert_used - used appropriately in tests
+    "B105",  # hardcoded_password_string - test fixtures deliberately use literals
+    "B106",  # hardcoded_password_funcarg - test fixtures deliberately use literals
+    "B107",  # hardcoded_password_default - NOAA sentinel tokens flagged as passwords
     "B108",  # hardcoded_tmp_directory - acceptable in test fixtures
+    "B110",  # try_except_pass - intentional cleanup guards suppress noisy logs
+    "B311",  # random - standard RNG acceptable for jitter/data sampling
     "B404",  # import_subprocess - required for CI automation
     "B603",  # subprocess_without_shell_equals_true - our subprocess calls are safe
     "B607",  # start_process_with_partial_path - standard system commands (git, etc.)
