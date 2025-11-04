@@ -39,7 +39,7 @@ shared-checks:
 	black $(FORMAT_TARGETS)
 	codespell --skip=".git,artifacts,models,node_modules,logs,htmlcov,*.json,*.csv" --quiet-level=2 --ignore-words=$(SHARED_CODESPELL_IGNORE)
 	vulture $(FORMAT_TARGETS) --min-confidence 80
-	deptry --config pyproject.toml $(FORMAT_TARGETS)
+	deptry --config pyproject.toml .
 	@# Security checks
 	@if command -v gitleaks >/dev/null 2>&1; then \
 		echo "Running gitleaks secret scan..."; \
