@@ -26,3 +26,24 @@ python scripts/complexity_guard.py --root src --max-cyclomatic 10 --max-cognitiv
 If you're adding a new script, consider:
 - **Add to ci_tools/scripts/** if it should be distributed to consuming repos (Zeus, Kalshi)
 - **Add to scripts/** if it's repo-specific or has external dependencies not required by consumers
+
+### sync_project_configs.py
+
+Distributes shared config files (e.g. `.gitleaks.toml`, `ci_shared.mk`, `shared-tool-config.toml`) into multiple consuming repositories without relying on submodule updates. By default it updates both the project root and its nested `ci_shared/` directory when present so checked-in copies stay in sync.
+
+**Usage examples:**
+```bash
+# Preview what would change
+python scripts/sync_project_configs.py --dry-run ~/zeus ~/aws ~/kalshi
+
+# Apply updates and keep backups with .bak suffix
+python scripts/sync_project_configs.py ~/zeus ~/aws ~/kalshi --backup-suffix .bak
+```
+
+**Flags:**
+- `--file PATH` – repeat to sync a custom subset of files
+- `--source-root PATH` – override the default source directory (current repo)
+- `--dry-run` – show planned actions without touching any project
+- `--backup-suffix SUFFIX` – append a suffix to on-disk backups before overwriting
+- `--subdir RELPATH` – additionally sync another subdirectory (default already includes `ci_shared`)
+- `--skip-default-subdirs` – only update project roots (disables the automatic `ci_shared/` target)

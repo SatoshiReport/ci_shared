@@ -120,22 +120,33 @@ CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 echo "Pushing to ${GIT_REMOTE}/${CURRENT_BRANCH}..."
 git push "${GIT_REMOTE}" "${CURRENT_BRANCH}"
 
-# Propagate ci_shared updates to consuming repositories (zeus, kalshi, aws)
-# This only runs when executed from the ci_shared repository itself
-if [ -f "${PROJECT_ROOT}/ci_tools/scripts/propagate_ci_shared.py" ]; then
+# Sync shared config files into consuming repositories when running inside ci_shared.
+if [ -f "${PROJECT_ROOT}/scripts/sync_project_configs.py" ]; then
   echo ""
-  echo "Propagating ci_shared updates to consuming repositories..."
-  PROPAGATE_SCRIPT=$(python - <<'PY'
-import ci_tools
-from pathlib import Path
-print((Path(ci_tools.__file__).resolve().parent / 'scripts' / 'propagate_ci_shared.py').as_posix())
-PY
-  )
-  if python "${PROPAGATE_SCRIPT}"; then
-    echo "✓ Successfully propagated ci_shared updates"
+  echo "Syncing shared config files into consuming repositories..."
+
+  if [ -n "${CI_SHARED_PROJECTS:-}" ]; then
+    # Allow callers to provide an explicit space-delimited list.
+    read -r -a CONSUMER_DIRS <<<"${CI_SHARED_PROJECTS}"
   else
-    echo "⚠️  Propagation encountered issues (see above)" >&2
-    echo "   Consuming repos may need manual submodule updates" >&2
+    PARENT_DIR="$(cd "${PROJECT_ROOT}/.." && pwd)"
+    DEFAULT_CONSUMERS=(zeus kalshi aws)
+    CONSUMER_DIRS=()
+    for repo in "${DEFAULT_CONSUMERS[@]}"; do
+      if [ -d "${PARENT_DIR}/${repo}" ]; then
+        CONSUMER_DIRS+=("${PARENT_DIR}/${repo}")
+      fi
+    done
+  fi
+
+  if [ "${#CONSUMER_DIRS[@]}" -eq 0 ]; then
+    echo "No consuming repositories detected; set CI_SHARED_PROJECTS to override."
+  else
+    if python "${PROJECT_ROOT}/scripts/sync_project_configs.py" "${CONSUMER_DIRS[@]}"; then
+      echo "✓ Config sync complete"
+    else
+      echo "⚠️  Config sync encountered issues (see above)" >&2
+    fi
   fi
 fi
 

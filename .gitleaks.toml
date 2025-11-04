@@ -44,6 +44,8 @@ regexes = [
     '''EXAMPLE_API_KEY''',
     '''YOUR_API_KEY_HERE''',
     '''INSERT_YOUR_''',
+    # Verbose pytest class names that trigger high-entropy rule
+    '''^Test(?:[A-Z][A-Za-z0-9]+){2,}$''',
 ]
 
 # Allowlist specific commits (if needed)
