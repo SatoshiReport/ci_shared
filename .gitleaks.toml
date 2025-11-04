@@ -18,9 +18,19 @@ paths = [
     '''htmlcov/''',
     '''\.coverage''',
     '''\.pytest_cache/''',
+    '''\.ruff_cache/''',
+    '''\.mypy_cache/''',
     '''__pycache__/''',
     '''.xci/''',
     '''logs/''',
+    '''artifacts/''',
+    '''models/''',
+    '''payloads/''',
+    '''metadata/''',
+    '''trash/''',
+    '''\.DS_Store$''',
+    '''tests/data/parquet/''',
+    '''src/weather_data_collector\.egg-info/''',
 ]
 
 # Allowlist specific patterns

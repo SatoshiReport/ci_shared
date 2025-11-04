@@ -5,6 +5,7 @@
 
 # Locate ci_tools config - first try submodule, then fall back to installed package
 CI_TOOLS_CONFIG_PATH := $(shell if [ -d "ci_shared/ci_tools/config" ]; then echo "ci_shared/ci_tools/config"; else $(PYTHON) -c "import ci_tools; from pathlib import Path; print((Path(ci_tools.__file__).parent / 'config').as_posix())" 2>/dev/null || echo "ci_shared/ci_tools/config"; fi)
+GITLEAKS_CONFIG_PATH := $(shell if [ -f ".gitleaks.toml" ]; then echo ".gitleaks.toml"; elif [ -f "ci_shared/.gitleaks.toml" ]; then echo "ci_shared/.gitleaks.toml"; else echo ""; fi)
 
 # Shared variables (can be overridden in individual Makefiles)
 FORMAT_TARGETS ?= src tests
@@ -41,8 +42,13 @@ shared-checks:
 	deptry --config pyproject.toml .
 	@# Security checks
 	@if command -v gitleaks >/dev/null 2>&1; then \
+		if [ -n "$(GITLEAKS_CONFIG_PATH)" ]; then \
+			CONFIG_FLAG="--config $(GITLEAKS_CONFIG_PATH)"; \
+		else \
+			CONFIG_FLAG=""; \
+		fi; \
 		echo "Running gitleaks secret scan..."; \
-		gitleaks detect --no-git --source . --verbose --exit-code 1; \
+		gitleaks detect $$CONFIG_FLAG --no-git --source . --verbose --exit-code 1; \
 	else \
 		echo "⚠️  gitleaks not installed - skipping secret scan"; \
 		echo "   Install: brew install gitleaks (macOS) or see https://github.com/gitleaks/gitleaks#installing"; \

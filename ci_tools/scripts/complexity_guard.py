@@ -150,8 +150,8 @@ def check_file_complexity(  # pylint: disable=too-many-locals
     return violations
 
 
-def main():
-    """Main entry point for complexity guard."""
+def build_parser() -> argparse.ArgumentParser:
+    """Create and configure the CLI argument parser."""
     parser = argparse.ArgumentParser(
         description="Enforce complexity limits (cyclomatic ≤10, cognitive ≤15)"
     )
@@ -170,21 +170,96 @@ def main():
         default=15,
         help="Maximum cognitive complexity (default: 15)",
     )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "Path relative to --root to exclude from scanning. "
+            "May be provided multiple times."
+        ),
+    )
+    return parser
 
-    args = parser.parse_args()
 
-    if not args.root.exists():
-        print(f"Error: Directory {args.root} does not exist", file=sys.stderr)
+def resolve_root(root: Path) -> Path:
+    """Validate and resolve the root directory."""
+    if not root.exists():
+        print(f"Error: Directory {root} does not exist", file=sys.stderr)
         sys.exit(1)
+    return root.resolve()
 
-    # Find all Python files
-    python_files = list(args.root.rglob("*.py"))
 
+def resolve_excludes(root_path: Path, excludes: list[str]) -> list[Path]:
+    """Convert user provided excludes to resolved Paths."""
+    return [(root_path / Path(exclude_path)).resolve() for exclude_path in excludes]
+
+
+def is_excluded(path: Path, exclude_paths: list[Path]) -> bool:
+    """Return True when the given path is within one of the excluded paths."""
+    for exclude_path in exclude_paths:
+        try:
+            path.resolve().relative_to(exclude_path)
+        except ValueError:
+            continue
+        return True
+    return False
+
+
+def gather_python_files(root_path: Path, exclude_paths: list[Path]) -> list[Path]:
+    """Return all python files under root that are not excluded."""
+    python_files = [
+        path for path in root_path.rglob("*.py") if not is_excluded(path, exclude_paths)
+    ]
     if not python_files:
-        print(f"No Python files found in {args.root}", file=sys.stderr)
+        print(f"No Python files found in {root_path}", file=sys.stderr)
         sys.exit(1)
+    return python_files
 
-    # Check each file
+
+def report_violations(
+    violations: list[ComplexityViolation], max_cyclomatic: int, max_cognitive: int
+) -> None:
+    """Print a summary of violations and exit with appropriate status."""
+    if not violations:
+        print(
+            f"✓ All functions meet complexity limits "
+            f"(cyclomatic ≤{max_cyclomatic}, cognitive ≤{max_cognitive})"
+        )
+        sys.exit(0)
+
+    print(
+        f"Complexity violations detected (cyclomatic ≤{max_cyclomatic}, "
+        f"cognitive ≤{max_cognitive}):"
+    )
+    print()
+
+    by_file: dict[str, list[ComplexityViolation]] = {}
+    for violation in violations:
+        by_file.setdefault(violation.file_path, []).append(violation)
+
+    for file_path in sorted(by_file.keys()):
+        file_violations = by_file[file_path]
+        print(f"{file_path}:")
+        for violation in sorted(file_violations, key=lambda x: x.line_number):
+            print(
+                f"  - Line {violation.line_number}: {violation.function_name} "
+                f"(cyclomatic={violation.cyclomatic}, cognitive={violation.cognitive})"
+            )
+        print()
+
+    print(f"Total: {len(violations)} function(s) exceed complexity limits")
+    sys.exit(1)
+
+
+def main():
+    """Main entry point for complexity guard."""
+    args = build_parser().parse_args()
+    root_path = resolve_root(args.root)
+    exclude_paths = resolve_excludes(root_path, args.exclude)
+    python_files = gather_python_files(root_path, exclude_paths)
+
     all_violations = []
     for file_path in python_files:
         violations = check_file_complexity(
@@ -192,39 +267,7 @@ def main():
         )
         all_violations.extend(violations)
 
-    # Report results
-    if all_violations:
-        print(
-            f"Complexity violations detected (cyclomatic ≤{args.max_cyclomatic}, "
-            f"cognitive ≤{args.max_cognitive}):"
-        )
-        print()
-
-        # Group by file
-        by_file = {}
-        for v in all_violations:
-            if v.file_path not in by_file:
-                by_file[v.file_path] = []
-            by_file[v.file_path].append(v)
-
-        for file_path in sorted(by_file.keys()):
-            violations = by_file[file_path]
-            print(f"{file_path}:")
-            for v in sorted(violations, key=lambda x: x.line_number):
-                print(
-                    f"  - Line {v.line_number}: {v.function_name} "
-                    f"(cyclomatic={v.cyclomatic}, cognitive={v.cognitive})"
-                )
-            print()
-
-        print(f"Total: {len(all_violations)} function(s) exceed complexity limits")
-        sys.exit(1)
-    else:
-        print(
-            f"✓ All functions meet complexity limits "
-            f"(cyclomatic ≤{args.max_cyclomatic}, cognitive ≤{args.max_cognitive})"
-        )
-        sys.exit(0)
+    report_violations(all_violations, args.max_cyclomatic, args.max_cognitive)
 
 
 if __name__ == "__main__":

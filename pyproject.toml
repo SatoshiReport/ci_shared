@@ -17,10 +17,10 @@ classifiers = [
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Build Tools"
 ]
-
-[project.dependencies]
 # tomli is needed for Python 3.10 (tomllib is built-in for 3.11+)
-tomli = {version = ">=2.0.0", markers = "python_version < '3.11'"}
+dependencies = [
+    "tomli>=2.0.0; python_version < '3.11'",
+]
 
 [project.optional-dependencies]
 dev = [
