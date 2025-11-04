@@ -18,7 +18,6 @@ SHARED_PYTEST_TARGET ?= $(SHARED_TEST_ROOT)
 SHARED_PYTEST_COV_TARGET ?= $(SHARED_SOURCE_ROOT)
 SHARED_PYTEST_THRESHOLD ?= 80
 SHARED_PYTEST_EXTRA ?=
-COMPLEXITY_GUARD_PATH ?= scripts/complexity_guard.py
 COMPLEXITY_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-cyclomatic 10 --max-cognitive 15
 MODULE_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-module-lines 400
 FUNCTION_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-function-lines 80
@@ -57,7 +56,7 @@ shared-checks:
 	$(PYTHON) -m ci_tools.scripts.policy_guard
 	$(PYTHON) -m ci_tools.scripts.data_guard
 	$(PYTHON) -m ci_tools.scripts.structure_guard --root $(SHARED_SOURCE_ROOT)
-	$(PYTHON) $(COMPLEXITY_GUARD_PATH) $(COMPLEXITY_GUARD_ARGS)
+	$(PYTHON) -m ci_tools.scripts.complexity_guard $(COMPLEXITY_GUARD_ARGS)
 	$(PYTHON) -m ci_tools.scripts.module_guard $(MODULE_GUARD_ARGS)
 	$(PYTHON) -m ci_tools.scripts.function_size_guard $(FUNCTION_GUARD_ARGS)
 	$(PYTHON) -m ci_tools.scripts.inheritance_guard --root $(SHARED_SOURCE_ROOT) --max-depth 2

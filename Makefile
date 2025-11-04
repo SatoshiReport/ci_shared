@@ -12,7 +12,6 @@ SHARED_PYTEST_TARGET = tests
 SHARED_PYTEST_COV_TARGET = ci_tools
 SHARED_PYTEST_THRESHOLD = 80
 SHARED_PYTEST_EXTRA = --strict-markers --cov-report=term
-COMPLEXITY_GUARD_PATH = scripts/complexity_guard.py
 COMPLEXITY_GUARD_ARGS = --root $(SHARED_SOURCE_ROOT) --max-cyclomatic 10 --max-cognitive 15
 MODULE_GUARD_ARGS = --root $(SHARED_SOURCE_ROOT) --max-module-lines 400
 FUNCTION_GUARD_ARGS = --root $(SHARED_SOURCE_ROOT) --max-function-lines 80
