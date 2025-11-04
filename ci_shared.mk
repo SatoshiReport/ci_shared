@@ -3,8 +3,16 @@
 # This file contains the common CI pipeline checks used by both repositories.
 # Include this in your Makefile with: include ci_shared.mk
 
-# Locate ci_tools config - first try submodule, then fall back to installed package
-CI_TOOLS_CONFIG_PATH := $(shell if [ -d "ci_shared/ci_tools/config" ]; then echo "ci_shared/ci_tools/config"; else $(PYTHON) -c "import ci_tools; from pathlib import Path; print((Path(ci_tools.__file__).parent / 'config').as_posix())" 2>/dev/null || echo "ci_shared/ci_tools/config"; fi)
+# Locate ci_tools config - prefer shared checkout (CI_SHARED_ROOT), then legacy submodule, then installed package
+CI_TOOLS_CONFIG_PATH := $(shell \
+	if [ -n "$(CI_SHARED_ROOT)" ] && [ -d "$(CI_SHARED_ROOT)/ci_tools/config" ]; then \
+		echo "$(CI_SHARED_ROOT)/ci_tools/config"; \
+	elif [ -d "ci_shared/ci_tools/config" ]; then \
+		echo "ci_shared/ci_tools/config"; \
+	else \
+		$(PYTHON) -c "import ci_tools; from pathlib import Path; print((Path(ci_tools.__file__).parent / 'config').as_posix())" 2>/dev/null || echo ""; \
+	fi \
+)
 GITLEAKS_CONFIG_PATH := $(shell if [ -f ".gitleaks.toml" ]; then echo ".gitleaks.toml"; elif [ -f "ci_shared/.gitleaks.toml" ]; then echo "ci_shared/.gitleaks.toml"; else echo ""; fi)
 
 # Shared variables (can be overridden in individual Makefiles)
@@ -12,7 +20,7 @@ FORMAT_TARGETS ?= src tests
 SHARED_SOURCE_ROOT ?= src
 SHARED_TEST_ROOT ?= tests
 SHARED_DOC_ROOT ?= .
-SHARED_CODESPELL_IGNORE ?= $(CI_TOOLS_CONFIG_PATH)/codespell_ignore_words.txt
+SHARED_CODESPELL_IGNORE ?= $(if $(CI_TOOLS_CONFIG_PATH),$(CI_TOOLS_CONFIG_PATH)/codespell_ignore_words.txt)
 SHARED_PYRIGHT_TARGETS ?= $(SHARED_SOURCE_ROOT)
 SHARED_PYLINT_TARGETS ?= $(SHARED_SOURCE_ROOT)
 SHARED_PYTEST_TARGET ?= $(SHARED_TEST_ROOT)
@@ -37,7 +45,12 @@ shared-checks:
 	@echo "Running shared CI checks..."
 	isort --profile black $(FORMAT_TARGETS)
 	black $(FORMAT_TARGETS)
-	codespell --skip=".git,artifacts,models,node_modules,logs,htmlcov,*.json,*.csv" --quiet-level=2 --ignore-words=$(SHARED_CODESPELL_IGNORE)
+	@if [ -n "$(SHARED_CODESPELL_IGNORE)" ] && [ -f "$(SHARED_CODESPELL_IGNORE)" ]; then \
+		IGNORE_FLAG="--ignore-words=$(SHARED_CODESPELL_IGNORE)"; \
+	else \
+		IGNORE_FLAG=""; \
+	fi; \
+	codespell --skip=".git,artifacts,models,node_modules,logs,htmlcov,*.json,*.csv" --quiet-level=2 $$IGNORE_FLAG
 	vulture $(FORMAT_TARGETS) --min-confidence 80
 	deptry --config pyproject.toml .
 	@# Security checks
