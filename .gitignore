@@ -88,3 +88,6 @@ htmlcov/
 *.backup
 *.old
 *.orig
+
+# Runtime logs
+logs/
