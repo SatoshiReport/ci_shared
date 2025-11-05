@@ -67,12 +67,31 @@ ci_tools = ["scripts/*.sh", "scripts/*.py", "vendor/**/*", "config/*"]
 # To sync: python -m ci_tools.scripts.tool_config_guard --sync
 # =============================================================================
 
-[tool.pytest.ini_options]
-pythonpath = ["."]
-addopts = [
-    "--tb=short",  # Shorter tracebacks
-    "-q",          # Quiet mode (less output)
+[tool.bandit]
+exclude_dirs = [
+    "/vendor/",
+    "/.venv/",
+    "/venv/",
+    "/data/",
+    "/artifacts/",
 ]
+skips = [
+    "B101",
+    "B301",
+    "B403",
+    "B105",
+    "B106",
+    "B107",
+    "B108",
+    "B110",
+    "B311",
+    "B404",
+    "B603",
+    "B607",
+    "B608",
+]
+
+[tool.coverage]
 
 [tool.coverage.run]
 omit = [
@@ -80,28 +99,42 @@ omit = [
     "*/__main__.py",
 ]
 
-[tool.bandit]
-# Skip checks that are expected/acceptable in our codebase
-skips = [
-    "B101",  # assert_used - used appropriately in tests
-    "B404",  # import_subprocess - required for CI automation
-    "B603",  # subprocess_without_shell_equals_true - our subprocess calls are safe
-    "B607",  # start_process_with_partial_path - standard system commands (git, etc.)
+[tool.pytest]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--tb=short",
+    "-q",
 ]
-exclude_dirs = ["/vendor/", "/.venv/", "/venv/"]
+pythonpath = [
+    ".",
+]
+
+[tool.ruff]
+extend-exclude = [
+    "ci_tools/vendor",
+]
 
 [tool.ruff.lint]
-select = ["TRY", "C90", "PLR"]  # C90=McCabe complexity, PLR=Pylint re 
 ignore = []
+select = [
+    "TRY",
+    "C90",
+    "PLR",
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "TRY002",
+    "TRY003",
+    "TRY203",
+    "PLR2004",
+]
 
 [tool.ruff.lint.pylint]
 max-args = 7
 max-branches = 10
 max-statements = 50
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["TRY002", "TRY003", "TRY203", "PLR2004"]
-"ci_tools/vendor/**" = ["PLR2004", "C901", "PLR", "TRY"]

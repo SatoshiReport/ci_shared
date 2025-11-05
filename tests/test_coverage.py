@@ -9,6 +9,9 @@ from ci_tools.ci_runtime.coverage import (
     extract_coverage_deficits,
 )
 from ci_tools.ci_runtime.models import CoverageCheckResult, CoverageDeficit
+from ci_tools.test_constants import get_constant
+
+COVERAGE_CONSTANTS = get_constant("coverage")
 
 
 class TestFindCoverageTable:
@@ -47,7 +50,7 @@ class TestFindCoverageTable:
             "Other output",
         ]
         table = _find_coverage_table(lines)
-        assert len(table) == 5  # header + separator + 2 files + blank
+        assert len(table) == COVERAGE_CONSTANTS["table_row_count"]
         assert "file1.py" in table[2]
         assert "file2.py" in table[3]
 
@@ -60,7 +63,7 @@ class TestFindCoverageTable:
         ]
         table = _find_coverage_table(lines)
         assert table is not None
-        assert len(table) == 2
+        assert len(table) == COVERAGE_CONSTANTS["minimal_table_length"]
 
     def test_returns_none_for_header_only(self):
         """Test returns None when only header exists."""
@@ -107,10 +110,10 @@ class TestParseCoverageEntries:
             "src/module.py          100     40    60%",
             "src/other.py           200     10    95%",
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 1
         assert deficits[0].path == "src/module.py"
-        assert deficits[0].coverage == 60.0
+        assert deficits[0].coverage == COVERAGE_CONSTANTS["low_coverage_percent"]
 
     def test_ignores_entries_above_threshold(self):
         """Test ignores entries at or above threshold."""
@@ -118,7 +121,7 @@ class TestParseCoverageEntries:
             "module1.py    100     10    90%",
             "module2.py    100     20    80%",
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 0
 
     def test_skips_separator_lines(self):
@@ -128,7 +131,7 @@ class TestParseCoverageEntries:
             "-----------------------------------------",
             "file.py                100     50    50%",
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 1
         assert deficits[0].path == "file.py"
 
@@ -138,7 +141,7 @@ class TestParseCoverageEntries:
             "module.py          100     50    50%",
             "TOTAL              100     50    50%",
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 1
         assert deficits[0].path == "module.py"
 
@@ -147,7 +150,7 @@ class TestParseCoverageEntries:
         rows = [
             "src/my module.py       100     50    50%",
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 1
         assert "my module.py" in deficits[0].path
 
@@ -157,7 +160,7 @@ class TestParseCoverageEntries:
             "file.py    10    5    45%",
         ]
         deficits = _parse_coverage_entries(rows, threshold=50.0)
-        assert deficits[0].coverage == 45.0
+        assert deficits[0].coverage == COVERAGE_CONSTANTS["parsed_percentage"]
 
     def test_skips_malformed_rows(self):
         """Test skips rows that don't have expected format."""
@@ -166,7 +169,7 @@ class TestParseCoverageEntries:
             "only two tokens",
             "file.py    100     50    50%",  # valid
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 1
         assert deficits[0].path == "file.py"
 
@@ -175,12 +178,12 @@ class TestParseCoverageEntries:
         rows = [
             "file.py    100     50    noPercent",
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 0
 
     def test_handles_empty_row_list(self):
         """Test handles empty row list."""
-        deficits = _parse_coverage_entries([], threshold=80.0)
+        deficits = _parse_coverage_entries([], threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 0
 
     def test_handles_blank_lines(self):
@@ -190,7 +193,7 @@ class TestParseCoverageEntries:
             "   ",
             "file.py    100    50    50%",
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 1
 
     def test_parses_float_percentages(self):
@@ -207,7 +210,7 @@ class TestParseCoverageEntries:
         rows = [
             "file.py    100    50    abc%",
         ]
-        deficits = _parse_coverage_entries(rows, threshold=80.0)
+        deficits = _parse_coverage_entries(rows, threshold=COVERAGE_CONSTANTS["threshold"])
         assert len(deficits) == 0
 
 

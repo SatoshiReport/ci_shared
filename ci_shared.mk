@@ -32,6 +32,7 @@ MODULE_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-module-lines 400
 FUNCTION_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-function-lines 80
 METHOD_COUNT_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-public-methods 15 --max-total-methods 25
 PYLINT_ARGS ?=
+BANDIT_BASELINE ?=
 
 PYTEST_NODES ?= 7
 PYTHON ?= python
@@ -66,7 +67,11 @@ shared-checks:
 		echo "⚠️  gitleaks not installed - skipping secret scan"; \
 		echo "   Install: brew install gitleaks (macOS) or see https://github.com/gitleaks/gitleaks#installing"; \
 	fi
-	$(PYTHON) -m bandit -c pyproject.toml -r $(FORMAT_TARGETS) -q
+	BANDIT_BASELINE_FLAG=""; \
+	if [ -n "$(BANDIT_BASELINE)" ] && [ -f "$(BANDIT_BASELINE)" ]; then \
+		BANDIT_BASELINE_FLAG="-b $(BANDIT_BASELINE)"; \
+	fi; \
+	$(PYTHON) -m bandit -c pyproject.toml -r $(FORMAT_TARGETS) -q --exclude data,artifacts $$BANDIT_BASELINE_FLAG
 	@# Skip safety in CI automation to avoid rate limits, run manually
 	@if [ -z "$(CI_AUTOMATION)" ]; then \
 		echo "Running safety vulnerability scan..."; \

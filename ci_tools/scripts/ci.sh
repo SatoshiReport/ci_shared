@@ -3,6 +3,14 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+CI_SHARED_ROOT="${CI_SHARED_ROOT:-${HOME}/ci_shared}"
+if [[ ! -d "${CI_SHARED_ROOT}" ]]; then
+  echo "Shared CI root not found at ${CI_SHARED_ROOT}. Set CI_SHARED_ROOT to your ci_shared checkout." >&2
+  exit 1
+fi
+if [[ ":${PYTHONPATH:-}:" != *":${CI_SHARED_ROOT}:"* ]]; then
+  export PYTHONPATH="${CI_SHARED_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+fi
 export PYTHONDONTWRITEBYTECODE=1
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 
@@ -39,6 +47,12 @@ if missing:
     else:
         print(result.stdout)
 PY
+
+echo "Syncing pyproject.toml tool configuration with shared template..."
+if ! python -m ci_tools.scripts.tool_config_guard --repo-root "${PROJECT_ROOT}" --sync; then
+  echo "tool_config_guard --sync failed; aborting." >&2
+  exit 1
+fi
 
 if ! python -c "import packaging" >/dev/null 2>&1; then
   VENDOR_PATH=$(python - <<'PY'

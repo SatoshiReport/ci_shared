@@ -33,6 +33,9 @@ from ci_tools.ci_runtime.models import (
     ReasoningEffortAbort,
     RuntimeOptions,
 )
+from ci_tools.test_constants import get_constant
+
+WORKFLOW_CONSTANTS = get_constant("workflow")
 
 
 class TestResolveModelChoice:
@@ -325,7 +328,7 @@ class TestCollectWorktreeDiffs:
 
         assert unstaged == "unstaged content"
         assert staged == "staged content"
-        assert mock_gather.call_count == 2
+        assert mock_gather.call_count == WORKFLOW_CONSTANTS["diff_call_count"]
         mock_gather.assert_any_call(staged=False)
         mock_gather.assert_any_call(staged=True)
 
@@ -575,8 +578,8 @@ class TestRunRepairIterations:
 
         run_repair_iterations(args, options)
 
-        assert mock_run.call_count == 3
-        assert mock_patches.call_count == 2
+        assert mock_run.call_count == WORKFLOW_CONSTANTS["repair_iterations_runs"]
+        assert mock_patches.call_count == WORKFLOW_CONSTANTS["repair_iterations_patch_calls"]
 
     @patch("ci_tools.ci_runtime.workflow.run_command")
     @patch("ci_tools.ci_runtime.workflow.extract_coverage_deficits")
@@ -616,7 +619,7 @@ class TestRunRepairIterations:
 
         run_repair_iterations(args, options)
 
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == WORKFLOW_CONSTANTS["retry_run_call_count"]
         assert mock_patches.call_count == 1
 
     @patch("ci_tools.ci_runtime.workflow.run_command")
@@ -651,8 +654,8 @@ class TestParseArgs:
         args = parse_args([])
 
         assert args.command == "./scripts/ci.sh"
-        assert args.max_iterations == 5
-        assert args.log_tail == 200
+        assert args.max_iterations == WORKFLOW_CONSTANTS["default_max_iterations"]
+        assert args.log_tail == WORKFLOW_CONSTANTS["default_log_tail"]
         assert args.patch_approval_mode == "prompt"
         assert args.dry_run is False
         assert args.auto_stage is False
@@ -668,13 +671,13 @@ class TestParseArgs:
         """Test max-iterations argument."""
         args = parse_args(["--max-iterations", "10"])
 
-        assert args.max_iterations == 10
+        assert args.max_iterations == WORKFLOW_CONSTANTS["cli_max_iterations"]
 
     def test_log_tail(self):
         """Test log-tail argument."""
         args = parse_args(["--log-tail", "500"])
 
-        assert args.log_tail == 500
+        assert args.log_tail == WORKFLOW_CONSTANTS["cli_log_tail"]
 
     def test_model_argument(self):
         """Test model argument."""
@@ -726,13 +729,13 @@ class TestParseArgs:
         """Test max-patch-lines argument."""
         args = parse_args(["--max-patch-lines", "2000"])
 
-        assert args.max_patch_lines == 2000
+        assert args.max_patch_lines == WORKFLOW_CONSTANTS["max_patch_lines"]
 
     def test_patch_retries(self):
         """Test patch-retries argument."""
         args = parse_args(["--patch-retries", "3"])
 
-        assert args.patch_retries == 3
+        assert args.patch_retries == WORKFLOW_CONSTANTS["patch_retries"]
 
 
 class TestMain:
@@ -786,7 +789,7 @@ class TestMain:
 
         result = main([])
 
-        assert result == 130
+        assert result == WORKFLOW_CONSTANTS["main_failure_code"]
 
     @patch("ci_tools.ci_runtime.workflow.parse_args")
     @patch("ci_tools.ci_runtime.workflow.configure_runtime")
@@ -803,7 +806,7 @@ class TestMain:
 
         result = main([])
 
-        assert result == 42
+        assert result == WORKFLOW_CONSTANTS["main_success_code"]
 
     @patch("ci_tools.ci_runtime.workflow.parse_args")
     @patch("ci_tools.ci_runtime.workflow.configure_runtime")

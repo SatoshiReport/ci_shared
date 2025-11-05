@@ -8,6 +8,7 @@ import pytest
 
 from ci_tools.scripts import complexity_guard
 from conftest import write_module
+from ci_tools.test_constants import get_constant
 
 
 def test_calculate_cognitive_complexity_counts_nested_branches() -> None:
@@ -24,7 +25,7 @@ def test_calculate_cognitive_complexity_counts_nested_branches() -> None:
     tree = complexity_guard.ast.parse(source)
     func = next(node for node in tree.body if isinstance(node, complexity_guard.ast.FunctionDef))
     score = complexity_guard.calculate_cognitive_complexity(func)
-    assert score >= 3
+    assert score >= get_constant("complexity_guard", "min_score")
 
 
 def test_check_file_complexity_detects_violation(tmp_path: Path) -> None:

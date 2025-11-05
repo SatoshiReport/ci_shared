@@ -7,7 +7,6 @@ import subprocess
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-
 from ci_tools.ci_runtime.config import (
     CONFIG_CANDIDATES,
     COVERAGE_THRESHOLD,
@@ -24,6 +23,9 @@ from ci_tools.ci_runtime.config import (
     detect_repo_root,
     load_repo_config,
 )
+from ci_tools.test_constants import get_constant
+
+COVERAGE_VALUES = get_constant("config", "coverage_thresholds")
 
 
 class TestConstants:
@@ -270,41 +272,41 @@ class TestCoercionFunctions:
         """Test _coerce_coverage_threshold with float value."""
         from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
-        config = {"coverage_threshold": 85.5}
-        result = _coerce_coverage_threshold(config, 80.0)
-        assert result == 85.5
+        config = {"coverage_threshold": COVERAGE_VALUES["float_example"]}
+        result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
+        assert result == COVERAGE_VALUES["float_example"]
 
     def test_coerce_coverage_threshold_with_int(self):
         """Test _coerce_coverage_threshold with int value."""
         from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
-        config = {"coverage_threshold": 90}
-        result = _coerce_coverage_threshold(config, 80.0)
-        assert result == 90.0
+        config = {"coverage_threshold": COVERAGE_VALUES["int_example"]}
+        result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
+        assert result == COVERAGE_VALUES["int_example"]
 
     def test_coerce_coverage_threshold_with_string(self):
         """Test _coerce_coverage_threshold with string value."""
         from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
-        config = {"coverage_threshold": "75.5"}
-        result = _coerce_coverage_threshold(config, 80.0)
-        assert result == 75.5
+        config = {"coverage_threshold": str(COVERAGE_VALUES["string_example"])}
+        result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
+        assert result == COVERAGE_VALUES["string_example"]
 
     def test_coerce_coverage_threshold_missing_uses_default(self):
         """Test _coerce_coverage_threshold uses default when key missing."""
         from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
         config = {}
-        result = _coerce_coverage_threshold(config, 80.0)
-        assert result == 80.0
+        result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
+        assert result == COVERAGE_VALUES["default"]
 
     def test_coerce_coverage_threshold_invalid_string_uses_default(self):
         """Test _coerce_coverage_threshold uses default for invalid string."""
         from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
         config = {"coverage_threshold": "not-a-number"}
-        result = _coerce_coverage_threshold(config, 80.0)
-        assert result == 80.0
+        result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
+        assert result == COVERAGE_VALUES["default"]
 
 
 class TestModuleLevelInitialization:
@@ -334,7 +336,7 @@ class TestModuleLevelInitialization:
         """Test COVERAGE_THRESHOLD is a float."""
         assert isinstance(COVERAGE_THRESHOLD, float)
         assert COVERAGE_THRESHOLD > 0.0
-        assert COVERAGE_THRESHOLD <= 100.0
+        assert COVERAGE_THRESHOLD <= COVERAGE_VALUES["max"]
 
     def test_default_repo_context_contains_key_info(self):
         """Test DEFAULT_REPO_CONTEXT contains expected guidance."""

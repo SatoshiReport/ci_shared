@@ -27,6 +27,10 @@ DEFAULT_FILES = [
     "shared-tool-config.toml",
 ]
 
+PROXY_MAPPINGS = {
+    "ci_tools_proxy/__init__.py": Path("ci_tools") / "__init__.py",
+}
+
 DEFAULT_SUBDIRS = ["ci_shared"]
 
 
@@ -159,6 +163,26 @@ def sync_target_root(
     return results
 
 
+def sync_proxy_files(
+    project_root: Path,
+    source_root: Path,
+    dry_run: bool,
+    backup_suffix: str,
+) -> list[SyncResult]:
+    """Copy special files (like the ci_tools proxy) into the project root."""
+    results: list[SyncResult] = []
+    for src_rel, dest_rel in PROXY_MAPPINGS.items():
+        src = source_root / src_rel
+        dest = project_root / dest_rel
+        dest_parent = dest.parent
+        if not dest_parent.exists() and not dry_run:
+            dest_parent.mkdir(parents=True, exist_ok=True)
+        results.append(
+            sync_file(project_root, dest_parent, src, dest, dry_run, backup_suffix)
+        )
+    return results
+
+
 def main(argv: Iterable[str]) -> int:
     args = parse_args(argv)
     source_root = args.source_root.resolve()
@@ -190,6 +214,11 @@ def main(argv: Iterable[str]) -> int:
                 files,
                 args.dry_run,
                 args.backup_suffix,
+            )
+        )
+        summary.extend(
+            sync_proxy_files(
+                project_root, source_root, args.dry_run, args.backup_suffix
             )
         )
 

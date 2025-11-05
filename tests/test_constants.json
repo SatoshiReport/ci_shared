@@ -1,0 +1,35 @@
+{
+  "complexity_guard": {
+    "min_score": 3
+  },
+  "config": {
+    "coverage_thresholds": {
+      "float_example": 85.5,
+      "int_example": 90,
+      "string_example": 75.5,
+      "default": 80.0,
+      "max": 100.0
+    }
+  },
+  "coverage": {
+    "table_row_count": 5,
+    "minimal_table_length": 2,
+    "low_coverage_percent": 60.0,
+    "parsed_percentage": 45.0,
+    "threshold": 80.0
+  },
+  "workflow": {
+    "diff_call_count": 2,
+    "repair_iterations_runs": 3,
+    "repair_iterations_patch_calls": 2,
+    "retry_run_call_count": 2,
+    "default_max_iterations": 5,
+    "default_log_tail": 200,
+    "cli_max_iterations": 10,
+    "cli_log_tail": 500,
+    "max_patch_lines": 2000,
+    "patch_retries": 3,
+    "main_failure_code": 130,
+    "main_success_code": 42
+  }
+}
