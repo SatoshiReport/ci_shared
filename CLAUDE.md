@@ -227,9 +227,9 @@ After `scripts/ci.sh` successfully pushes ci_shared changes:
 1. **`propagate_ci_shared.py`** automatically runs
 2. For each consuming repo declared in the config file:
    - **Automatically commits any uncommitted changes** (if present)
-   - Updates the ci_shared submodule to the latest commit
-   - Creates a commit: "Update ci_shared submodule"
-   - Pushes the change to the remote
+   - Copies the canonical shared files (`ci_shared.mk`, `shared-tool-config.toml`, etc.) into the repo via `scripts/sync_project_configs.py`
+   - Runs `tool_config_guard --sync` inside that repo
+   - Creates a commit describing the sync and pushes it to the remote
 
 ### What Gets Auto-Updated
 
@@ -253,15 +253,16 @@ If auto-propagation fails or you need to update manually:
 ```bash
 # From any consuming repo (api, zeus, kalshi, aws)
 cd ../zeus  # or api / kalshi / aws
-git submodule update --remote ci_shared
-git add ci_shared
-git commit -m "Update ci_shared submodule"
+python ../ci_shared/scripts/sync_project_configs.py .
+python -m ci_tools.scripts.tool_config_guard --repo-root . --sync
+git add -A
+git commit -m "Sync shared CI files"
 git push
 ```
 
 ### Skipping Auto-Propagation
 
 Auto-propagation is skipped if:
-- The submodule is already up to date
-- The consuming repo is not found
+- The consuming repo path cannot be located
+- The sync script or tool_config_guard fails inside the consuming repo
 - Auto-commit of existing changes fails (rare)

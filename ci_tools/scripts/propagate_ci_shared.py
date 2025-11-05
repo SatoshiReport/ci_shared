@@ -2,10 +2,8 @@
 """
 Propagate ci_shared updates to consuming repositories.
 
-After ci_shared is successfully pushed, this script updates the ci_shared
-submodule in all consuming repositories (zeus, kalshi, aws) and pushes the changes.
-
-This ensures all repos automatically get the latest CI tooling updates.
+After ci_shared is successfully pushed, this script copies the canonical CI files
+into all consuming repositories (api, zeus, kalshi, aws) and pushes the changes.
 """
 
 import subprocess
@@ -45,14 +43,9 @@ def get_latest_commit_message(repo_path: Path) -> str:
 
 
 def _validate_repo_state(repo_path: Path, repo_name: str) -> bool:
-    """Check if repo and submodule exist, auto-commit any uncommitted changes."""
+    """Check if repo exists and auto-commit any uncommitted changes."""
     if not repo_path.exists():
         print(f"⚠️  Repository not found: {repo_path}")
-        return False
-
-    submodule_path = repo_path / "ci_shared"
-    if not submodule_path.exists():
-        print(f"⚠️  ci_shared submodule not found in {repo_name}")
         return False
 
     result = run_command(
@@ -90,40 +83,58 @@ Co-Authored-By: Claude <noreply@anthropic.com>"""
     return True
 
 
-def _update_and_check_submodule(repo_path: Path, repo_name: str) -> bool:
-    """Update submodule and check if there are changes."""
-    print("Updating submodule to latest from origin/main...")
+def _sync_repo_configs(repo_path: Path, repo_name: str, source_root: Path) -> bool:
+    """Copy shared configs into the consuming repo and stage changes."""
+    sync_script = source_root / "scripts" / "sync_project_configs.py"
+    if not sync_script.exists():
+        print(f"⚠️  Sync script missing at {sync_script}")
+        return False
+
+    print("Syncing shared config files...")
     result = run_command(
-        ["git", "submodule", "update", "--remote", "--merge", "ci_shared"],
-        cwd=repo_path,
+        [sys.executable, str(sync_script), str(repo_path)],
+        cwd=source_root,
         check=False,
     )
     if result.returncode != 0:
-        print(f"⚠️  Failed to update submodule in {repo_name}")
-        print(f"   Error: {result.stderr}")
+        print(f"⚠️  sync_project_configs failed for {repo_name}")
         return False
 
-    result = run_command(
-        ["git", "diff", "HEAD", "ci_shared"],
+    print("Running tool_config_guard sync...")
+    guard_result = run_command(
+        [
+            sys.executable,
+            "-m",
+            "ci_tools.scripts.tool_config_guard",
+            "--repo-root",
+            str(repo_path),
+            "--sync",
+        ],
+        cwd=source_root,
+        check=False,
+    )
+    if guard_result.returncode != 0:
+        print(f"⚠️  tool_config_guard --sync failed for {repo_name}")
+        return False
+
+    run_command(["git", "add", "-A"], cwd=repo_path)
+    status = run_command(
+        ["git", "status", "--porcelain"],
         cwd=repo_path,
         check=False,
     )
-
-    if not result.stdout.strip():
-        print(f"✓ {repo_name} submodule already up to date")
+    if not status.stdout.strip():
+        print(f"✓ {repo_name} already up to date")
         return False
-
     return True
 
 
 def _commit_and_push_update(
     repo_path: Path, repo_name: str, ci_shared_commit_msg: str
 ) -> bool:
-    """Stage, commit, and push the submodule update."""
-    run_command(["git", "add", "ci_shared"], cwd=repo_path)
-
+    """Stage, commit, and push the synced ci_shared files."""
     commit_msg = (
-        f"Update ci_shared submodule\n\nLatest ci_shared change: {ci_shared_commit_msg}"
+        f"Update shared CI files\n\nLatest ci_shared change: {ci_shared_commit_msg}"
     )
 
     result = run_command(
@@ -132,10 +143,10 @@ def _commit_and_push_update(
         check=False,
     )
     if result.returncode != 0:
-        print(f"⚠️  Failed to commit submodule update in {repo_name}")
+        print(f"⚠️  Failed to commit shared CI updates in {repo_name}")
         return False
 
-    print(f"✓ Committed submodule update in {repo_name}")
+    print(f"✓ Committed shared CI updates in {repo_name}")
 
     result = run_command(
         ["git", "push"],
@@ -143,39 +154,45 @@ def _commit_and_push_update(
         check=False,
     )
     if result.returncode != 0:
-        print(f"⚠️  Failed to push submodule update in {repo_name}")
+        print(f"⚠️  Failed to push shared CI updates in {repo_name}")
         print(f"   Run 'cd {repo_path} && git push' to push manually")
         return False
 
-    print(f"✓ Pushed submodule update to {repo_name}")
+    print(f"✓ Pushed shared CI updates to {repo_name}")
     return True
 
 
 def update_submodule_in_repo(
-    repo_path: Path, ci_shared_commit_msg: str, *, display_name: str | None = None
+    repo_path: Path,
+    ci_shared_commit_msg: str,
+    *,
+    display_name: str | None = None,
+    source_root: Path,
 ) -> bool:
     """
-    Update ci_shared submodule in a consuming repository.
+    Apply the latest ci_shared files to a consuming repository.
 
     Returns:
         True if update was successful, False if skipped or failed
     """
     repo_name = display_name or repo_path.name
     print(f"\n{'='*70}")
-    print(f"Updating ci_shared submodule in {repo_name}...")
+    print(f"Updating ci_shared assets in {repo_name}...")
     print(f"{'='*70}")
 
     if not _validate_repo_state(repo_path, repo_name):
         return False
 
-    if not _update_and_check_submodule(repo_path, repo_name):
+    if not _sync_repo_configs(repo_path, repo_name, source_root):
         return False
 
     return _commit_and_push_update(repo_path, repo_name, ci_shared_commit_msg)
 
 
 def _process_repositories(
-    consuming_repos: Iterable[ConsumingRepo], commit_msg: str
+    consuming_repos: Iterable[ConsumingRepo],
+    commit_msg: str,
+    source_root: Path,
 ) -> tuple[list[str], list[str], list[str]]:
     """Process all consuming repositories and return results."""
     updated = []
@@ -187,7 +204,10 @@ def _process_repositories(
         repo_name = repo.name
         try:
             success = update_submodule_in_repo(
-                repo_path, commit_msg, display_name=repo_name
+                repo_path,
+                commit_msg,
+                display_name=repo_name,
+                source_root=source_root,
             )
             if success:
                 updated.append(repo_name)
@@ -247,7 +267,7 @@ def main() -> int:
         + ", ".join(f"{repo.name} ({repo.path})" for repo in consuming_repos)
     )
 
-    updated, skipped, failed = _process_repositories(consuming_repos, commit_msg)
+    updated, skipped, failed = _process_repositories(consuming_repos, commit_msg, cwd)
 
     _print_summary(updated, skipped, failed)
 
