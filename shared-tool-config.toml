@@ -52,6 +52,8 @@ omit = [
 # Skip checks that are expected/acceptable in our codebase
 skips = [
     "B101",  # assert_used - used appropriately in tests
+    "B301",  # pickle - trusted-only serialization helpers
+    "B403",  # import_pickle - trusted-only serialization helpers
     "B105",  # hardcoded_password_string - test fixtures deliberately use literals
     "B106",  # hardcoded_password_funcarg - test fixtures deliberately use literals
     "B107",  # hardcoded_password_default - NOAA sentinel tokens flagged as passwords

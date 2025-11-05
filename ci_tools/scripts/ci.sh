@@ -79,13 +79,7 @@ if [ -z "${COMMIT_MESSAGE}" ]; then
   if command -v codex >/dev/null 2>&1; then
     echo "Requesting commit message from Codex..."
     COMMIT_OUTPUT_FILE="$(mktemp)"
-    SCRIPT_PATH=$(python - <<'PY'
-import ci_tools
-from pathlib import Path
-print((Path(ci_tools.__file__).resolve().parent / 'scripts' / 'generate_commit_message.py').as_posix())
-PY
-    )
-    if python "${SCRIPT_PATH}" --output "${COMMIT_OUTPUT_FILE}"; then
+    if python -m ci_tools.scripts.generate_commit_message --output "${COMMIT_OUTPUT_FILE}"; then
       COMMIT_MESSAGE="$(head -n 1 "${COMMIT_OUTPUT_FILE}")"
       COMMIT_BODY="$(tail -n +2 "${COMMIT_OUTPUT_FILE}")"
       if [ -n "${COMMIT_MESSAGE//[[:space:]]/}" ]; then
@@ -146,6 +140,31 @@ if [ -f "${PROJECT_ROOT}/scripts/sync_project_configs.py" ]; then
       echo "✓ Config sync complete"
     else
       echo "⚠️  Config sync encountered issues (see above)" >&2
+    fi
+
+    echo ""
+    echo "Running shared tool-config sync in consuming repositories..."
+    TOOL_SYNC_ERRORS=0
+    for repo_dir in "${CONSUMER_DIRS[@]}"; do
+      if [ ! -d "${repo_dir}" ]; then
+        echo "  • Skipping missing repo: ${repo_dir}" >&2
+        TOOL_SYNC_ERRORS=1
+        continue
+      fi
+
+      echo "  • ${repo_dir}"
+      if python -m ci_tools.scripts.tool_config_guard --repo-root "${repo_dir}" --sync; then
+        echo "    ✓ tool configuration synced"
+      else
+        echo "    ⚠️  tool_config_guard failed for ${repo_dir}" >&2
+        TOOL_SYNC_ERRORS=1
+      fi
+    done
+
+    if [ "${TOOL_SYNC_ERRORS}" -ne 0 ]; then
+      echo "⚠️  One or more repositories failed tool-config sync; review logs above." >&2
+    else
+      echo "✓ Tool-config sync complete across consuming repositories."
     fi
   fi
 fi
