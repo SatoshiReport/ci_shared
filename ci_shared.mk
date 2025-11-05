@@ -51,7 +51,8 @@ shared-checks:
 	else \
 		IGNORE_FLAG=""; \
 	fi; \
-	codespell --skip=".git,artifacts,models,node_modules,logs,htmlcov,*.json,*.csv" --quiet-level=2 $$IGNORE_FLAG
+		CODESPELL_SKIP=".git,artifacts,artifacts/*,data,data/*,models,node_modules,logs,htmlcov,*.json,*.csv"; \
+		codespell --skip="$$CODESPELL_SKIP" --quiet-level=2 $$IGNORE_FLAG
 	vulture $(FORMAT_TARGETS) --min-confidence 80
 	deptry --config pyproject.toml .
 	@# Security checks
