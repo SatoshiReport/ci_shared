@@ -72,8 +72,10 @@ exclude_dirs = [
     "/vendor/",
     "/.venv/",
     "/venv/",
-    "/data/",
     "/artifacts/",
+    "/trash/",
+    "/models/",
+    "/logs/",
 ]
 skips = [
     "B101",

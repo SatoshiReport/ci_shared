@@ -10,7 +10,8 @@ useDefault = true
 [allowlist]
 description = "Allowlisted files and patterns"
 
-# Allowlist paths that commonly have false positives
+# Allowlist runtime/cache paths so gitleaks can skip massive directories that
+# routinely store model artifacts or temporary exports in Zeus/AWS worktrees.
 paths = [
     '''\.git/''',
     '''node_modules/''',

@@ -58,6 +58,17 @@ MAX_CLASS_LINES := 160
 include ci_shared.mk
 ```
 
+## Handling Large Artifacts
+
+Secret scanning and workspace cleanup both intentionally avoid massive runtime
+directories (for example `artifacts/`, `trash/`, `models/`, and `logs/`)
+because those trees frequently balloon into multi‑gigabyte caches in Zeus/AWS
+worktrees. Gitleaks now iterates over a curated list of code/doc roots instead
+of `--source .`, and the `.gitleaks.toml` allowlist mirrors the same bulky
+paths. Likewise, the `pyc`/`__pycache__` cleanup runs only against those
+code-bearing directories. Data fixtures are no longer excluded, so keep any
+checked-in datasets small enough for regular linting and secret scans.
+
 ## Working with Violations
 
 1. Run the offending guard directly with verbose flags (e.g.,

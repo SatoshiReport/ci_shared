@@ -33,6 +33,9 @@ FUNCTION_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-function-lines 80
 METHOD_COUNT_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-public-methods 15 --max-total-methods 25
 PYLINT_ARGS ?=
 BANDIT_BASELINE ?=
+BANDIT_EXCLUDE ?= artifacts,trash,models,logs
+GITLEAKS_SOURCE_DIRS ?= $(strip $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT) $(FORMAT_TARGETS) scripts docs ci_tools ci_tools_proxy ci_shared.mk shared-tool-config.toml pyproject.toml Makefile README.md SECURITY.md)
+SHARED_CLEANUP_ROOTS ?= $(strip $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT) $(FORMAT_TARGETS) scripts docs ci_tools ci_tools_proxy)
 
 PYTEST_NODES ?= 7
 PYTHON ?= python
@@ -51,7 +54,7 @@ shared-checks:
 	else \
 		IGNORE_FLAG=""; \
 	fi; \
-		CODESPELL_SKIP=".git,artifacts,artifacts/*,data,data/*,models,node_modules,logs,htmlcov,*.json,*.csv"; \
+		CODESPELL_SKIP=".git,artifacts,artifacts/*,trash,trash/*,models,node_modules,logs,htmlcov,*.json,*.csv"; \
 		codespell --skip="$$CODESPELL_SKIP" --quiet-level=2 $$IGNORE_FLAG
 	vulture $(FORMAT_TARGETS) --min-confidence 80
 	deptry --config pyproject.toml .
@@ -63,7 +66,23 @@ shared-checks:
 			CONFIG_FLAG=""; \
 		fi; \
 		echo "Running gitleaks secret scan..."; \
-		gitleaks detect $$CONFIG_FLAG --no-git --source . --verbose --exit-code 1; \
+		SCAN_TARGETS="$(GITLEAKS_SOURCE_DIRS)"; \
+		if [ -z "$$SCAN_TARGETS" ]; then \
+			SCAN_TARGETS="."; \
+		fi; \
+		STATUS=0; \
+		for TARGET in $$SCAN_TARGETS; do \
+			if [ -e "$$TARGET" ]; then \
+				echo "  → scanning $$TARGET"; \
+				if ! gitleaks detect $$CONFIG_FLAG --no-git --source "$$TARGET" --verbose --exit-code 1; then \
+					STATUS=$$?; \
+					break; \
+				fi; \
+			fi; \
+		done; \
+		if [ $$STATUS -ne 0 ]; then \
+			exit $$STATUS; \
+		fi; \
 	else \
 		echo "⚠️  gitleaks not installed - skipping secret scan"; \
 		echo "   Install: brew install gitleaks (macOS) or see https://github.com/gitleaks/gitleaks#installing"; \
@@ -72,7 +91,7 @@ shared-checks:
 	if [ -n "$(BANDIT_BASELINE)" ] && [ -f "$(BANDIT_BASELINE)" ]; then \
 		BANDIT_BASELINE_FLAG="-b $(BANDIT_BASELINE)"; \
 	fi; \
-	$(PYTHON) -m bandit -c pyproject.toml -r $(FORMAT_TARGETS) -q --exclude data,artifacts $$BANDIT_BASELINE_FLAG
+	$(PYTHON) -m bandit -c pyproject.toml -r $(FORMAT_TARGETS) -q --exclude $(BANDIT_EXCLUDE) $$BANDIT_BASELINE_FLAG
 	@# Skip safety in CI automation to avoid rate limits, run manually
 	@if [ -z "$(CI_AUTOMATION)" ]; then \
 		echo "Running safety vulnerability scan..."; \
@@ -92,8 +111,16 @@ shared-checks:
 	ruff check --target-version=py310 --fix $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT)
 	pyright --warnings $(SHARED_PYRIGHT_TARGETS)
 	pylint -j $(PYTEST_NODES) $(PYLINT_ARGS) $(SHARED_PYLINT_TARGETS)
-	@find . -name "*.pyc" -delete 2>/dev/null || true
-	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@for DIR in $(SHARED_CLEANUP_ROOTS); do \
+		if [ -d "$$DIR" ]; then \
+			find "$$DIR" -name "*.pyc" -delete 2>/dev/null || true; \
+		fi; \
+	done
+	@for DIR in $(SHARED_CLEANUP_ROOTS); do \
+		if [ -d "$$DIR" ]; then \
+			find "$$DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true; \
+		fi; \
+	done
 	pytest -n $(PYTEST_NODES) $(SHARED_PYTEST_TARGET) --cov=$(SHARED_PYTEST_COV_TARGET) --cov-fail-under=$(SHARED_PYTEST_THRESHOLD) $(SHARED_PYTEST_EXTRA)
 	$(PYTHON) -m ci_tools.scripts.coverage_guard --threshold 80 --data-file "$(CURDIR)/.coverage"
 	$(PYTHON) -m compileall $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT)
