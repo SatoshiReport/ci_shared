@@ -272,7 +272,9 @@ def test_sync_configs(tmp_path):
     shared_config.write_text('[tool.ruff]\nline-length = 100')
     repo_pyproject = tmp_path / "pyproject.toml"
     repo_pyproject.write_text(
-        '[project]\nname = "test"\n\n[tool.old]\nvalue = "remove me"\n'
+        '[project]\nname = "test"\n\n'
+        '[tool.old]\nvalue = "remove me"\n\n'
+        '[tool.deptry]\nexclude = ["tests"]\n'
     )
 
     result = sync_configs(shared_config, repo_pyproject)
@@ -281,7 +283,9 @@ def test_sync_configs(tmp_path):
     assert "[project]" in updated
     assert "[tool.ruff]" in updated
     assert "line-length = 100" in updated
-    assert "tool.old" not in updated
+    assert "[tool.old]" in updated
+    assert "[tool.deptry]" in updated
+    assert 'exclude = ["tests"]' in updated
 
 
 def test_sync_configs_error(tmp_path):

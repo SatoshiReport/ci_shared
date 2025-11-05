@@ -234,8 +234,8 @@ def print_tool_config_diff(
         _print_tool_section(tool_name, shared_tools[tool_name])
 
 
-def _remove_tool_sections(pyproject_text: str) -> str:
-    """Remove all [tool.*] sections from a pyproject.toml string."""
+def _remove_tool_sections(pyproject_text: str, managed_tools: set[str]) -> str:
+    """Remove managed [tool.<name>] sections from a pyproject.toml string."""
     lines = pyproject_text.splitlines()
     preserved_lines = []
     inside_tool_section = False
@@ -244,7 +244,11 @@ def _remove_tool_sections(pyproject_text: str) -> str:
         stripped = line.strip()
         if stripped.startswith("[") and stripped.endswith("]"):
             section_name = stripped[1:-1].strip()
-            inside_tool_section = section_name.startswith("tool")
+            inside_tool_section = any(
+                section_name == f"tool.{tool}"
+                or section_name.startswith(f"tool.{tool}.")
+                for tool in managed_tools
+            )
             if inside_tool_section:
                 continue
         if not inside_tool_section:
@@ -309,7 +313,8 @@ def sync_configs(shared_config_path: Path, repo_pyproject_path: Path) -> bool:
         )
         return False
 
-    preserved_sections = _remove_tool_sections(pyproject_text)
+    managed_tools = set(shared_data.get("tool", {}).keys())
+    preserved_sections = _remove_tool_sections(pyproject_text, managed_tools)
     if preserved_sections:
         preserved_sections = preserved_sections.rstrip() + "\n\n"
 
