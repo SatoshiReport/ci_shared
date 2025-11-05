@@ -11,6 +11,9 @@ This ensures all repos automatically get the latest CI tooling updates.
 import subprocess
 import sys
 from pathlib import Path
+from typing import Iterable
+
+from ci_tools.utils.consumers import ConsumingRepo, load_consuming_repos
 
 
 def run_command(
@@ -148,14 +151,16 @@ def _commit_and_push_update(
     return True
 
 
-def update_submodule_in_repo(repo_path: Path, ci_shared_commit_msg: str) -> bool:
+def update_submodule_in_repo(
+    repo_path: Path, ci_shared_commit_msg: str, *, display_name: str | None = None
+) -> bool:
     """
     Update ci_shared submodule in a consuming repository.
 
     Returns:
         True if update was successful, False if skipped or failed
     """
-    repo_name = repo_path.name
+    repo_name = display_name or repo_path.name
     print(f"\n{'='*70}")
     print(f"Updating ci_shared submodule in {repo_name}...")
     print(f"{'='*70}")
@@ -170,17 +175,20 @@ def update_submodule_in_repo(repo_path: Path, ci_shared_commit_msg: str) -> bool
 
 
 def _process_repositories(
-    parent_dir: Path, consuming_repos: list[str], commit_msg: str
+    consuming_repos: Iterable[ConsumingRepo], commit_msg: str
 ) -> tuple[list[str], list[str], list[str]]:
     """Process all consuming repositories and return results."""
     updated = []
     skipped = []
     failed = []
 
-    for repo_name in consuming_repos:
-        repo_path = parent_dir / repo_name
+    for repo in consuming_repos:
+        repo_path = repo.path
+        repo_name = repo.name
         try:
-            success = update_submodule_in_repo(repo_path, commit_msg)
+            success = update_submodule_in_repo(
+                repo_path, commit_msg, display_name=repo_name
+            )
             if success:
                 updated.append(repo_name)
             else:
@@ -230,13 +238,16 @@ def main() -> int:
         print("⚠️  Failed to get latest commit message", file=sys.stderr)
         return 1
 
-    # Find consuming repositories (siblings of ci_shared)
-    parent_dir = cwd.parent
-    consuming_repos = ["zeus", "kalshi", "aws"]
-
-    updated, skipped, failed = _process_repositories(
-        parent_dir, consuming_repos, commit_msg
+    consuming_repos = load_consuming_repos(repo_root=cwd)
+    if not consuming_repos:
+        print("⚠️  No consuming repositories configured; skipping propagation")
+        return 0
+    print(
+        "\nConsuming repos: "
+        + ", ".join(f"{repo.name} ({repo.path})" for repo in consuming_repos)
     )
+
+    updated, skipped, failed = _process_repositories(consuming_repos, commit_msg)
 
     _print_summary(updated, skipped, failed)
 

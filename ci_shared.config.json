@@ -1,0 +1,15 @@
+{
+  "repo_context": "Shared CI tooling for Zeus, Kalshi, AWS, and API repositories.",
+  "protected_path_prefixes": [
+    "ci_tools/",
+    "scripts/ci.sh",
+    "ci_shared.mk",
+    "shared-tool-config.toml"
+  ],
+  "consuming_repositories": [
+    {"name": "api", "path": "../api"},
+    {"name": "zeus", "path": "../zeus"},
+    {"name": "kalshi", "path": "../kalshi"},
+    {"name": "aws", "path": "../aws"}
+  ]
+}

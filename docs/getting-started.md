@@ -26,7 +26,8 @@ This exposes:
 
 ## Configure Repository Context (Optional)
 Place a `ci_shared.config.json` at the repository root when you need custom
-metadata for the automation loop:
+metadata for the automation loop **and to declare the consuming repositories that
+should receive automatic syncs**:
 
 ```json
 {
@@ -37,12 +38,19 @@ metadata for the automation loop:
     "scripts/ci.sh",
     "Makefile"
   ],
+  "consuming_repositories": [
+    {"name": "api", "path": "../api"},
+    {"name": "zeus", "path": "../zeus"},
+    {"name": "kalshi", "path": "../kalshi"},
+    {"name": "aws", "path": "../aws"}
+  ],
   "coverage_threshold": 80.0
 }
 ```
 
 Values are read by `ci_tools.ci` to tighten safety rails and tailor coverage
-messages.
+messages, while the `consuming_repositories` list drives `scripts/ci.sh`
+propagation so that running CI once from `ci_shared` updates every sibling repo.
 
 ## Quick Usage
 

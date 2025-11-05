@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List
 
+from ci_tools.utils.consumers import load_consuming_repos
+
 # Files we keep in sync across repos by default
 DEFAULT_FILES = [
     ".gitleaks.toml",
@@ -49,8 +51,11 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "projects",
-        nargs="+",
-        help="Absolute or relative paths to project directories that need updates.",
+        nargs="*",
+        help=(
+            "Absolute or relative paths to project directories that need updates. "
+            "If omitted, repositories from ci_shared.config.json are used."
+        ),
     )
     parser.add_argument(
         "--source-root",
@@ -198,7 +203,15 @@ def main(argv: Iterable[str]) -> int:
         return 2
 
     summary: List[SyncResult] = []
-    for project in args.projects:
+    projects = args.projects
+    if not projects:
+        projects = [repo.path for repo in load_consuming_repos(source_root)]
+
+    if not projects:
+        print("[warning] No consuming repositories configured; nothing to sync.")
+        return 0
+
+    for project in projects:
         project_root = Path(project).expanduser().resolve()
         if not project_root.exists():
             summary.append(

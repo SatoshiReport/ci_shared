@@ -28,6 +28,8 @@ secrets.*
 *password*
 config.json
 *config*.json
+!ci_shared.config.json
+!.ci_shared.config.json
 !xci.config.json.example
 
 # API keys and tokens

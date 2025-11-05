@@ -36,8 +36,9 @@ stable.
    ```
 
 ## Configuration
-- `ci_shared.config.json` (optional) supplies repository context, protected
-  path prefixes, and coverage thresholds consumed by the automation loop.
+- `ci_shared.config.json` supplies repository context, protected path prefixes,
+  coverage thresholds, **and the `consuming_repositories` list** that drives
+  config sync + propagation into API, Zeus, Kalshi, AWS, etc.
 - Environment variables such as `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT`, and
   `GIT_REMOTE` customize Codex behavior and push targets.
 - `xci.config.json` fine-tunes the legacy shell wrapper (attempt counts, log

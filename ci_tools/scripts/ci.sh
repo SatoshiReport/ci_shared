@@ -133,22 +133,23 @@ if [ -f "${PROJECT_ROOT}/scripts/sync_project_configs.py" ]; then
   echo ""
   echo "Syncing shared config files into consuming repositories..."
 
-  if [ -n "${CI_SHARED_PROJECTS:-}" ]; then
-    # Allow callers to provide an explicit space-delimited list.
-    read -r -a CONSUMER_DIRS <<<"${CI_SHARED_PROJECTS}"
-  else
-    PARENT_DIR="$(cd "${PROJECT_ROOT}/.." && pwd)"
-    DEFAULT_CONSUMERS=(zeus kalshi aws)
+  if ! mapfile -t CONSUMER_DIRS < <(
+    python - "${PROJECT_ROOT}" <<'PY'
+import sys
+from pathlib import Path
+from ci_tools.utils.consumers import load_consuming_repos
+
+repo_root = Path(sys.argv[1]).resolve()
+for repo in load_consuming_repos(repo_root):
+    print(repo.path)
+PY
+  ); then
+    echo "⚠️  Failed to resolve consuming repositories; skipping sync." >&2
     CONSUMER_DIRS=()
-    for repo in "${DEFAULT_CONSUMERS[@]}"; do
-      if [ -d "${PARENT_DIR}/${repo}" ]; then
-        CONSUMER_DIRS+=("${PARENT_DIR}/${repo}")
-      fi
-    done
   fi
 
   if [ "${#CONSUMER_DIRS[@]}" -eq 0 ]; then
-    echo "No consuming repositories detected; set CI_SHARED_PROJECTS to override."
+    echo "No consuming repositories configured; update ci_shared.config.json if needed."
   else
     if python "${PROJECT_ROOT}/scripts/sync_project_configs.py" "${CONSUMER_DIRS[@]}"; then
       echo "✓ Config sync complete"
@@ -180,6 +181,14 @@ if [ -f "${PROJECT_ROOT}/scripts/sync_project_configs.py" ]; then
     else
       echo "✓ Tool-config sync complete across consuming repositories."
     fi
+  fi
+
+  echo ""
+  echo "Propagating ci_shared updates into consuming repositories..."
+  if python -m ci_tools.scripts.propagate_ci_shared; then
+    echo "✓ Propagation complete"
+  else
+    echo "⚠️  Propagation encountered issues (see above)" >&2
   fi
 fi
 

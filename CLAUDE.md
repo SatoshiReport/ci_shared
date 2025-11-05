@@ -218,14 +218,14 @@ When working on this codebase:
 
 ## Auto-Propagation of Updates
 
-When you successfully run CI and push changes from the ci_shared repository, the updates are **automatically propagated** to all consuming repositories (zeus, kalshi, aws).
+When you successfully run CI and push changes from the ci_shared repository, the updates are **automatically propagated** to every repository listed under `consuming_repositories` in `ci_shared.config.json` (api, zeus, kalshi, aws by default).
 
 ### How It Works
 
 After `scripts/ci.sh` successfully pushes ci_shared changes:
 
 1. **`propagate_ci_shared.py`** automatically runs
-2. For each consuming repo (zeus, kalshi, aws):
+2. For each consuming repo declared in the config file:
    - **Automatically commits any uncommitted changes** (if present)
    - Updates the ci_shared submodule to the latest commit
    - Creates a commit: "Update ci_shared submodule"
@@ -251,8 +251,8 @@ Each consuming repo maintains its own:
 If auto-propagation fails or you need to update manually:
 
 ```bash
-# From any consuming repo (zeus, kalshi, aws)
-cd ../zeus  # or kalshi, or aws
+# From any consuming repo (api, zeus, kalshi, aws)
+cd ../zeus  # or api / kalshi / aws
 git submodule update --remote ci_shared
 git add ci_shared
 git commit -m "Update ci_shared submodule"

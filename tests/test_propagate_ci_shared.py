@@ -19,6 +19,7 @@ from ci_tools.scripts.propagate_ci_shared import (
     run_command,
     update_submodule_in_repo,
 )
+from ci_tools.utils.consumers import ConsumingRepo
 
 
 def test_run_command_success():
@@ -358,14 +359,16 @@ def test_update_submodule_in_repo_success(tmp_path):
 
 def test_process_repositories(tmp_path):
     """Test _process_repositories processes all repos."""
-    parent_dir = tmp_path
+    repos = [
+        ConsumingRepo("zeus", tmp_path / "zeus"),
+        ConsumingRepo("kalshi", tmp_path / "kalshi"),
+        ConsumingRepo("aws", tmp_path / "aws"),
+    ]
     with patch(
         "ci_tools.scripts.propagate_ci_shared.update_submodule_in_repo"
     ) as mock_update:
         mock_update.side_effect = [True, False, Exception("error")]
-        updated, skipped, failed = _process_repositories(
-            parent_dir, ["zeus", "kalshi", "aws"], "Test commit"
-        )
+        updated, skipped, failed = _process_repositories(repos, "Test commit")
         assert updated == ["zeus"]
         assert skipped == ["kalshi"]
         assert failed == ["aws"]
@@ -417,11 +420,15 @@ def test_main_success_with_updates(tmp_path, monkeypatch):
     monkeypatch.chdir(repo_dir)
 
     with patch("ci_tools.scripts.propagate_ci_shared.get_latest_commit_message") as mock1:
-        with patch("ci_tools.scripts.propagate_ci_shared._process_repositories") as mock2:
-            mock1.return_value = "Test commit"
-            mock2.return_value = (["zeus"], ["kalshi"], [])
-            result = main()
-            assert result == 0
+        with patch("ci_tools.utils.consumers.load_consuming_repos") as mock_load:
+            with patch(
+                "ci_tools.scripts.propagate_ci_shared._process_repositories"
+            ) as mock2:
+                mock1.return_value = "Test commit"
+                mock_load.return_value = [ConsumingRepo("api", tmp_path / "api")]
+                mock2.return_value = (["zeus"], ["kalshi"], [])
+                result = main()
+                assert result == 0
 
 
 def test_main_with_failures(tmp_path, monkeypatch):
@@ -433,8 +440,12 @@ def test_main_with_failures(tmp_path, monkeypatch):
     monkeypatch.chdir(repo_dir)
 
     with patch("ci_tools.scripts.propagate_ci_shared.get_latest_commit_message") as mock1:
-        with patch("ci_tools.scripts.propagate_ci_shared._process_repositories") as mock2:
-            mock1.return_value = "Test commit"
-            mock2.return_value = ([], [], ["aws"])
-            result = main()
-            assert result == 1
+        with patch("ci_tools.utils.consumers.load_consuming_repos") as mock_load:
+            with patch(
+                "ci_tools.scripts.propagate_ci_shared._process_repositories"
+            ) as mock2:
+                mock1.return_value = "Test commit"
+                mock_load.return_value = [ConsumingRepo("api", tmp_path / "api")]
+                mock2.return_value = ([], [], ["aws"])
+                result = main()
+                assert result == 1
