@@ -202,6 +202,13 @@ def test_format_toml_tool_section():
     assert "enabled = true" in result
 
 
+def test_format_toml_tool_section_quotes_special_keys():
+    """Keys requiring quoting should be quoted."""
+    data = {"tests/**": ["TRY002"]}
+    result = format_toml_tool_section(data)
+    assert '"tests/**"' in result
+
+
 def test_print_toml_value_string(capsys):
     """Test _print_toml_value with string."""
     _print_toml_value("name", "test")
@@ -259,17 +266,22 @@ def test_print_tool_config_diff_no_tool(capsys):
     # Should not crash
 
 
-def test_sync_configs(tmp_path, capsys):
-    """Test sync_configs displays instructions."""
+def test_sync_configs(tmp_path):
+    """Test sync_configs overwrites tool sections."""
     shared_config = tmp_path / "shared.toml"
     shared_config.write_text('[tool.ruff]\nline-length = 100')
     repo_pyproject = tmp_path / "pyproject.toml"
-    repo_pyproject.write_text('[project]\nname = "test"')
+    repo_pyproject.write_text(
+        '[project]\nname = "test"\n\n[tool.old]\nvalue = "remove me"\n'
+    )
 
     result = sync_configs(shared_config, repo_pyproject)
     assert result is True
-    captured = capsys.readouterr()
-    assert "SYNC MODE" in captured.out
+    updated = repo_pyproject.read_text()
+    assert "[project]" in updated
+    assert "[tool.ruff]" in updated
+    assert "line-length = 100" in updated
+    assert "tool.old" not in updated
 
 
 def test_sync_configs_error(tmp_path):
@@ -348,6 +360,11 @@ def test_handle_config_mismatch_sync_mode(tmp_path, capsys):
         repo_pyproject, differences, True, shared_config
     )
     assert result == 0
+    updated = repo_pyproject.read_text()
+    assert "[tool.ruff]" in updated
+    assert "line-length = 100" in updated
+    output = capsys.readouterr().out
+    assert "Updated [tool.*]" in output
 
 
 def test_handle_config_mismatch_validation_mode(tmp_path):
@@ -423,7 +440,7 @@ def test_main_sync_mode(tmp_path):
     shared_config = tmp_path / "shared-tool-config.toml"
     shared_config.write_text('[tool.ruff]\nline-length = 100')
     repo_pyproject = tmp_path / "pyproject.toml"
-    repo_pyproject.write_text('[project]\nname = "test"')
+    repo_pyproject.write_text('[project]\nname = "test"\n')
 
     with patch("ci_tools.scripts.tool_config_guard._find_shared_config") as mock:
         mock.return_value = shared_config
@@ -433,3 +450,5 @@ def test_main_sync_mode(tmp_path):
         ):
             result = main()
             assert result == 0
+    updated = repo_pyproject.read_text()
+    assert "[tool.ruff]" in updated

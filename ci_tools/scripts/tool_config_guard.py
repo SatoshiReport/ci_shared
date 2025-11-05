@@ -119,35 +119,45 @@ def _compare_tool_section(shared: Any, repo: Any, path: str) -> list[str]:
     return differences
 
 
+def _format_toml_key(key: str) -> str:
+    """Return TOML-safe key, quoting when required."""
+    if key and all(ch.isalnum() or ch in "-_" for ch in key):
+        return key
+    escaped = key.replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def _format_toml_list(key: str, value: list, indent_str: str) -> list[str]:
     """Format a list value as TOML."""
     import json  # pylint: disable=import-outside-toplevel
 
+    formatted_key = _format_toml_key(key)
     if len(value) == 0:
-        return [f"{indent_str}{key} = []"]
+        return [f"{indent_str}{formatted_key} = []"]
 
     if all(isinstance(x, str) for x in value):
         # Multi-line array
-        lines = [f"{indent_str}{key} = ["]
+        lines = [f"{indent_str}{formatted_key} = ["]
         for item in value:
             lines.append(f'{indent_str}    "{item}",')
         lines.append(f"{indent_str}]")
         return lines
 
-    return [f"{indent_str}{key} = {json.dumps(value)}"]
+    return [f"{indent_str}{formatted_key} = {json.dumps(value)}"]
 
 
 def _format_toml_value(key: str, value: Any, indent_str: str) -> list[str]:
     """Format a single TOML value."""
+    formatted_key = _format_toml_key(key)
     if isinstance(value, dict):
         # Nested table - skip, will be handled separately
         return []
     if isinstance(value, str):
-        return [f'{indent_str}{key} = "{value}"']
+        return [f'{indent_str}{formatted_key} = "{value}"']
     if isinstance(value, bool):
-        return [f'{indent_str}{key} = {"true" if value else "false"}']
+        return [f'{indent_str}{formatted_key} = {"true" if value else "false"}']
     if isinstance(value, (int, float)):
-        return [f"{indent_str}{key} = {value}"]
+        return [f"{indent_str}{formatted_key} = {value}"]
     if isinstance(value, list):
         return _format_toml_list(key, value, indent_str)
     return []
@@ -166,25 +176,27 @@ def format_toml_tool_section(data: dict[str, Any], indent: int = 0) -> str:
 
 def _print_toml_value(key: str, value: Any) -> None:
     """Print a single TOML value."""
+    formatted_key = _format_toml_key(key)
     if isinstance(value, str):
-        print(f'{key} = "{value}"')
+        print(f'{formatted_key} = "{value}"')
     elif isinstance(value, bool):
-        print(f'{key} = {"true" if value else "false"}')
+        print(f'{formatted_key} = {"true" if value else "false"}')
     elif isinstance(value, list):
         _print_toml_list(key, value)
     else:
-        print(f"{key} = {value}")
+        print(f"{formatted_key} = {value}")
 
 
 def _print_toml_list(key: str, value: list) -> None:
     """Print a list value as TOML."""
+    formatted_key = _format_toml_key(key)
     if all(isinstance(x, str) for x in value):
-        print(f"{key} = [")
+        print(f"{formatted_key} = [")
         for item in value:
             print(f'    "{item}",')
         print("]")
     else:
-        print(f"{key} = {value}")
+        print(f"{formatted_key} = {value}")
 
 
 def _print_tool_section(tool_name: str, tool_config: dict[str, Any]) -> None:
@@ -222,37 +234,94 @@ def print_tool_config_diff(
         _print_tool_section(tool_name, shared_tools[tool_name])
 
 
+def _remove_tool_sections(pyproject_text: str) -> str:
+    """Remove all [tool.*] sections from a pyproject.toml string."""
+    lines = pyproject_text.splitlines()
+    preserved_lines = []
+    inside_tool_section = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section_name = stripped[1:-1].strip()
+            inside_tool_section = section_name.startswith("tool")
+            if inside_tool_section:
+                continue
+        if not inside_tool_section:
+            preserved_lines.append(line)
+
+    # Remove trailing blank lines to avoid runaway spacing when we append fresh config
+    while preserved_lines and not preserved_lines[-1].strip():
+        preserved_lines.pop()
+
+    return "\n".join(preserved_lines)
+
+
+def _render_tool_section_lines(section_path: str, config: dict[str, Any]) -> list[str]:
+    """Render a single tool section (including nested sections) into TOML lines."""
+    lines = [f"[{section_path}]"]
+    formatted_values = format_toml_tool_section(config)
+    if formatted_values:
+        lines.extend(formatted_values.splitlines())
+    lines.append("")  # Blank line between this section and nested/next sections
+
+    for key in sorted(config.keys()):
+        value = config[key]
+        if isinstance(value, dict):
+            lines.extend(_render_tool_section_lines(f"{section_path}.{key}", value))
+
+    return lines
+
+
+def _generate_tool_config_text(shared_data: dict[str, Any]) -> str:
+    """Generate TOML text for all [tool.*] sections from the shared config."""
+    if "tool" not in shared_data:
+        return ""
+
+    lines: list[str] = []
+    for tool_name in sorted(shared_data["tool"].keys()):
+        tool_config = shared_data["tool"][tool_name]
+        lines.extend(_render_tool_section_lines(f"tool.{tool_name}", tool_config))
+
+    rendered = "\n".join(lines).strip()
+    return f"{rendered}\n" if rendered else ""
+
+
 def sync_configs(shared_config_path: Path, repo_pyproject_path: Path) -> bool:
     """
-    Display instructions for syncing tool configurations.
-
-    Note: This does not automatically modify files to avoid risk of corruption.
-    Users should manually copy the tool configurations.
+    Overwrite all [tool.*] sections in pyproject.toml with the shared configuration.
 
     Returns:
-        True (always, since we just display instructions)
+        True if the file was updated successfully, False otherwise.
     """
     try:
         shared_data = load_toml(shared_config_path)
-        repo_data = load_toml(repo_pyproject_path)
+        pyproject_text = repo_pyproject_path.read_text(encoding="utf-8")
     except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Error displaying sync instructions: {e}", file=sys.stderr)
+        print(f"Error loading config files: {e}", file=sys.stderr)
         return False
 
-    print("\n" + "!" * 70)
-    print("SYNC MODE: Manual steps required")
-    print("!" * 70)
-    print(f"\n1. Open {repo_pyproject_path}")
-    print("2. Remove all existing [tool.*] sections")
-    print("3. Copy the following configuration to the end of the file:")
+    new_tool_config = _generate_tool_config_text(shared_data)
+    if not new_tool_config:
+        print(
+            "Shared configuration does not define any [tool.*] sections.",
+            file=sys.stderr,
+        )
+        return False
 
-    print_tool_config_diff(shared_data, repo_data)
+    preserved_sections = _remove_tool_sections(pyproject_text)
+    if preserved_sections:
+        preserved_sections = preserved_sections.rstrip() + "\n\n"
 
-    print("=" * 70)
-    print("\nAlternative: Copy directly from shared-tool-config.toml")
-    print(f"  File location: {shared_config_path}")
-    print("=" * 70)
+    updated_text = f"{preserved_sections}{new_tool_config}"
+    try:
+        repo_pyproject_path.write_text(updated_text, encoding="utf-8")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Error writing updated pyproject.toml: {e}", file=sys.stderr)
+        return False
 
+    print(f"✓ Updated [tool.*] sections in {repo_pyproject_path}")
+    print(f"  Source of truth: {shared_config_path}")
     return True
 
 
@@ -303,10 +372,9 @@ def _handle_config_mismatch(
         print(f"  - {diff}")
 
     if sync_mode:
-        sync_configs(shared_config_path, repo_pyproject)
-        return 0
+        return 0 if sync_configs(shared_config_path, repo_pyproject) else 2
 
-    print("\nRun with --sync to see update instructions")
+    print("\nRun with --sync to rewrite [tool.*] sections automatically")
     return 1
 
 
