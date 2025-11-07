@@ -8,8 +8,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ci_tools.scripts.generate_commit_message import (
+    _build_chunk_summary_diff,
+    _chunk_by_lines,
+    _chunk_by_sections,
+    _chunk_diff,
+    _env_int,
     _prepare_payload,
     _read_staged_diff,
+    _request_with_chunking,
+    _split_diff_sections,
     _write_payload,
     main,
     parse_args,
@@ -272,3 +279,103 @@ def test_main_uses_env_var_for_reasoning(
     result = main([])
     assert result == 0
     mock_resolve_reasoning.assert_called_once_with("high", validate=False)
+
+
+@patch.dict("os.environ", {}, clear=True)
+def test_env_int_default():
+    """Return defaults when env var missing."""
+    assert _env_int("NON_EXISTENT_VALUE", 7) == 7
+
+
+@patch.dict("os.environ", {"TEST_VALUE": "123"}, clear=True)
+def test_env_int_parses_int():
+    """Parse integer value from env."""
+    assert _env_int("TEST_VALUE", 0) == 123
+
+
+@patch.dict("os.environ", {"TEST_VALUE": "not-a-number"}, clear=True)
+def test_env_int_handles_invalid():
+    """Fall back to default on invalid numbers."""
+    assert _env_int("TEST_VALUE", 42) == 42
+
+
+def test_split_diff_sections_breaks_on_headers():
+    """Split diff into sections per file."""
+    diff_text = (
+        "diff --git a/a.txt b/a.txt\n+1\n"
+        "diff --git a/b.txt b/b.txt\n+2\n+3\n"
+        "diff --git a/c.txt b/c.txt\n@@ -1 +1 @@\n-foo\n+bar\n"
+    )
+    sections = _split_diff_sections(diff_text)
+    assert len(sections) == 3
+    assert sections[0].startswith("diff --git a/a.txt")
+    assert "+2" in sections[1]
+    assert "a/c.txt" in sections[2]
+
+
+def test_chunk_by_sections_respects_limits():
+    """Chunk sections based on line budget."""
+    sections = [
+        "diff --git a/a b/a\n+1",
+        "diff --git a/b b/b\n+2\n+3",
+        "diff --git a/c b/c\n+4",
+    ]
+    chunks = _chunk_by_sections(sections, max_lines=2, max_chunks=3)
+    assert len(chunks) == 3
+    assert "+1" in chunks[0]
+    assert "+2" in chunks[1]
+
+
+def test_chunk_by_lines_evenly_distributes():
+    """Chunk diff by raw line count when needed."""
+    diff_text = "\n".join(f"+line {i}" for i in range(12))
+    chunks = _chunk_by_lines(diff_text, chunk_count=4)
+    assert len(chunks) == 4
+    assert chunks[0].startswith("+line 0")
+    assert chunks[-1].endswith("+line 11")
+
+
+def test_chunk_diff_handles_large_diffs():
+    """Chunk diff using section boundaries and fall back to lines."""
+    diff_text = "\n".join(
+        f"diff --git a/file{i}.py b/file{i}.py\n+line {i}\n"
+        for i in range(5)
+    )
+    chunks = _chunk_diff(diff_text, max_chunk_lines=3, max_chunks=4)
+    assert len(chunks) > 1
+    combined = "\n\n".join(chunks)
+    for i in range(5):
+        assert f"file{i}.py" in combined
+
+
+def test_build_chunk_summary_diff_formats_output():
+    """Synthesized diff includes chunk headers and summary text."""
+    summary_diff = _build_chunk_summary_diff(
+        [("Added feature", ["- detail a", "- detail b"])]
+    )
+    assert "diff --git a/chunk_1 b/chunk_1" in summary_diff
+    assert "+ chunk 1 summary: Added feature" in summary_diff
+    assert "- detail a" in summary_diff
+
+
+@patch("ci_tools.scripts.generate_commit_message.request_commit_message")
+def test_request_with_chunking_combines_results(mock_request):
+    """Ensure request_with_chunking summarizes chunks then finalizes."""
+    mock_request.side_effect = [
+        ("Chunk1 summary", ["detail 1"]),
+        ("Chunk2 summary", []),
+        ("Final summary", ["Final body"]),
+    ]
+    summary, body = _request_with_chunking(
+        chunks=["diff --git a/a b/a\n+1", "diff --git a/b b/b\n+2"],
+        model="gpt-5-codex",
+        reasoning_effort="medium",
+        detailed=True,
+    )
+    assert summary == "Final summary"
+    assert body == ["Final body"]
+    assert mock_request.call_count == 3
+    first_call_kwargs = mock_request.call_args_list[0].kwargs
+    assert "chunk 1/2" in first_call_kwargs["extra_context"]
+    final_call_kwargs = mock_request.call_args_list[-1].kwargs
+    assert "synthesized summary" in final_call_kwargs["extra_context"]
