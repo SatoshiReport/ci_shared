@@ -91,7 +91,7 @@ shared-checks:
 	if [ -n "$(BANDIT_BASELINE)" ] && [ -f "$(BANDIT_BASELINE)" ]; then \
 		BANDIT_BASELINE_FLAG="-b $(BANDIT_BASELINE)"; \
 	fi; \
-	$(PYTHON) -m bandit -c pyproject.toml -r $(FORMAT_TARGETS) -q --exclude $(BANDIT_EXCLUDE) $$BANDIT_BASELINE_FLAG
+	$(PYTHON) -m ci_tools.scripts.bandit_wrapper -c pyproject.toml -r $(FORMAT_TARGETS) -q --exclude $(BANDIT_EXCLUDE) $$BANDIT_BASELINE_FLAG
 	@# Skip safety in CI automation to avoid rate limits, run manually
 	@if [ -z "$(CI_AUTOMATION)" ]; then \
 		echo "Running safety vulnerability scan..."; \
