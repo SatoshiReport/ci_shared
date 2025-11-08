@@ -116,6 +116,62 @@ The toolkit includes specialized guard scripts that enforce code quality policie
 - **`bandit`**: Python security linter (SQL injection, shell injection, etc.)
 - **`safety`**: Dependency vulnerability scanner (checks PyPI against CVE database)
 
+## CI Rules & Guard Contract
+`ci_tools/scripts/ci.sh` (invoked by `make check`) is the canonical CI entry point. It executes the steps below in order; Claude must never propose patches that attempt to skip, suppress, or reorder them.
+
+### Formatting, Naming, and Layout
+- Python 3.10+ only, four-space indentation, `snake_case` for modules/functions, `PascalCase` for classes; public APIs must remain backward compatible for downstream consumers.
+- Keep `FORMAT_TARGETS=ci_tools scripts`; always run `isort --profile black $(FORMAT_TARGETS)` and `black $(FORMAT_TARGETS)` (tests are pulled in via the Makefile targets).
+- Tests belong under `tests/test_<module>.py` with `test_` prefixes. Shared pytest defaults (`-q --tb=short PYTHONPATH=["."]`) are defined in `shared-tool-config.toml`.
+
+### Static Analysis Pipeline (strict order)
+1. `codespell` skipping `.git`, `artifacts`, `trash`, `models`, `logs`, `htmlcov`, `*.json`, `*.csv`; extend `ci_tools/config/codespell_ignore_words.txt` for repo-specific vocabulary.
+2. `vulture $(FORMAT_TARGETS) --min-confidence 80`.
+3. `deptry --config pyproject.toml .`.
+4. `gitleaks` scans `ci_tools`, `ci_tools_proxy`, `scripts`, `tests`, `docs`, `shared-tool-config.toml`, `pyproject.toml`, `Makefile`, `README.md`, `SECURITY.md`, etc.
+5. `python -m ci_tools.scripts.bandit_wrapper -c pyproject.toml -r $(FORMAT_TARGETS) -q --exclude $(BANDIT_EXCLUDE)`.
+6. `python -m safety scan --json --cache tail` (automation skips it; local development must run it).
+7. `ruff check --target-version=py310 --fix $(FORMAT_TARGETS) tests` (TRY, C90, PLR rule sets).
+8. `pyright --warnings ci_tools`.
+9. `pylint -j 7 ci_tools` using Ruff’s strict profile (max args 7, branches 10, statements 50).
+
+### Tests, Coverage, and Bytecode
+- `pytest -n 7 tests/ --cov=ci_tools --cov-fail-under=80` with fixtures from `tests/conftest.py`.
+- `python -m ci_tools.scripts.coverage_guard --threshold 80 --data-file .coverage` enforces the same coverage floor.
+- `python -m compileall ci_tools tests scripts` runs last to surface syntax errors without executing business logic.
+
+### Guard Thresholds
+- `structure_guard --root ci_tools`: classes ≤100 LOC.
+- `complexity_guard --root ci_tools --max-cyclomatic 10 --max-cognitive 15`.
+- `module_guard --root ci_tools --max-module-lines 400`.
+- `function_size_guard --root ci_tools --max-function-lines 80`.
+- `inheritance_guard --max-depth 2`; `method_count_guard` (≤15 public / ≤25 total methods).
+- `dependency_guard --max-instantiations 5` inside `__init__` / `__post_init__`.
+- `unused_module_guard --strict` blocks orphans and suspicious suffixes (`_refactored`, `_slim`, `_optimized`, `_old`, `_backup`, `_copy`, `_new`, `_temp`, `_v2`, `_2`).
+- `policy_guard`, `data_guard`, and `documentation_guard` use the defaults described in `ci_tools/config/*`; suppressions beyond the guard-specific tokens do not exist.
+
+### Policy Guard Hot Buttons
+- Banned keywords/tokens: `legacy`, `fallback`, `default`, `catch_all`, `failover`, `backup`, `compat`, `backwards`, `deprecated`, `legacy_mode`, `old_api`, `legacy_flag`, plus TODO/FIXME/HACK/WORKAROUND/LEGACY/DEPRECATED anywhere in source or comments.
+- Only two suppression tokens exist: `policy_guard: allow-broad-except` and `policy_guard: allow-silent-handler`. `# noqa` and `pylint: disable` are rejected.
+- Exception handling must not use bare `except` or catch `Exception/BaseException`; handlers must re-raise and cannot log-and-suppress. Raising `Exception/BaseException` is also forbidden.
+- Literal fallbacks/defaults are banned in `.get`, `.setdefault`, `getattr`, `os.getenv`, ternaries, or `if x is None` blocks when the fallback is a literal. Inside `ci_tools`, synchronous calls (`time.sleep`, `subprocess.run/call/check_call/check_output`, `requests.*`) are blocked entirely.
+- Functions ≥80 lines fail `function_size_guard`. The policy guard still checks for ≥150-line functions and duplicate ≥6-line functions. `.pyc` / `__pycache__` artifacts and directories/files named `_legacy`, `_compat`, `_deprecated`, etc., also fail.
+
+### Data Guard Expectations
+- Assigning or comparing numeric literals (except -1/0/1) to variables whose names include `threshold`, `limit`, `timeout`, `default`, `max`, `min`, `retry`, `window`, `size`, `count`, etc., violates the guard unless allowlisted via `config/data_guard_allowlist.json`.
+- Creating pandas/numpy objects with literal datasets is blocked unless allowlisted under `["dataframe"]`. Only UPPER_SNAKE_CASE constants are implicitly exempt.
+
+### Documentation Guard Requirements
+- `README.md` and `CLAUDE.md` must always exist; `docs/README.md` is required because `docs/` exists.
+- Packages containing `.py` files (e.g., `ci_tools/`, `ci_tools_proxy/`) each need their own `README.md`.
+- Additional required READMEs: `docs/architecture/`, every `docs/domains/*/`, `docs/reference/*/`, and `docs/operations/` directories once they contain Markdown.
+
+### Miscellaneous Enforcement
+- `gitleaks` rejects secrets; whitelist safe tokens through `.gitleaks.toml` or the shared config files.
+- The Makefile wipes `*.pyc` and `__pycache__` under `ci_tools`, `ci_tools_proxy`, `scripts`, `docs`, and `tests` every run—never rely on bytecode.
+- Guards (`policy_guard`, `data_guard`, `structure_guard`, `complexity_guard`, `module_guard`, `function_size_guard`, `inheritance_guard`, `method_count_guard`, `dependency_guard`, `unused_module_guard --strict`, `documentation_guard`) run *before* pytest; fix guard failures first.
+- Repository and automation metadata belongs solely in `ci_shared.config.json`; never clone secrets or protected paths elsewhere.
+
 ### Configuration
 
 **Repository-Specific Configuration**
