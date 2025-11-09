@@ -164,8 +164,10 @@ SUSPICIOUS_PATTERNS: Tuple[str, ...] = (
 )
 
 FALSE_POSITIVE_RULES: Dict[str, Tuple[str, ...]] = {
-    "_temp": ("temperature", "max_temp"),
+    "_temp": ("temperature", "max_temp", "cleanup_temp_artifacts"),
     "_2": ("phase_2", "_v2"),
+    "_v2": ("migrate_v2", "migration_state_v2"),
+    "_backup": ("aws_backup",),
 }
 
 
