@@ -404,6 +404,10 @@ class GuardRunner(ABC):
 
         Returns:
             Exit code: 0 if no violations, 1 otherwise
+
+        Note:
+            Subclasses must override __init__() to take no arguments and call
+            super().__init__() with hardcoded name/description values.
         """
-        guard = cls()  # type: ignore[call-arg]  # pylint: disable=no-value-for-parameter
+        guard = cls()  # type: ignore[call-arg]  # Subclasses override __init__ to take no args
         return guard.run(argv)

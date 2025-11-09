@@ -29,7 +29,7 @@ from typing import Any
 try:
     import tomllib  # Python 3.11+
 except ImportError:
-    import tomli as tomllib  # type: ignore[import-not-found]  # Fallback for Python 3.10
+    import tomli as tomllib  # type: ignore[import-not-found]  # tomli only needed for Python 3.10
 
 
 def load_toml(path: Path) -> dict[str, Any]:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
 
 from ci_tools.ci_runtime.coverage import (
     _find_coverage_table,
@@ -30,10 +29,10 @@ class TestFindCoverageTable:
         ]
         table = _find_coverage_table(lines)
         assert table is not None
-        table_list = cast(list[str], table)
-        assert len(table_list) > 1
-        assert "Name" in table_list[0]  # pylint: disable=unsubscriptable-object
-        assert "Cover" in table_list[0]  # pylint: disable=unsubscriptable-object
+        assert len(table) > 1
+        header_line = table[0]
+        assert "Name" in header_line
+        assert "Cover" in header_line
 
     def test_returns_none_when_no_header_found(self):
         """Test returns None when no coverage header found."""
@@ -53,10 +52,9 @@ class TestFindCoverageTable:
         ]
         table = _find_coverage_table(lines)
         assert table is not None
-        table_list = cast(list[str], table)
-        assert len(table_list) == COVERAGE_CONSTANTS["table_row_count"]
-        assert "file1.py" in table_list[2]  # pylint: disable=unsubscriptable-object
-        assert "file2.py" in table_list[3]  # pylint: disable=unsubscriptable-object
+        assert len(table) == COVERAGE_CONSTANTS["table_row_count"]
+        assert "file1.py" in table[2]
+        assert "file2.py" in table[3]
 
     def test_handles_table_at_end_of_output(self):
         """Test handles coverage table at end of output."""
@@ -84,8 +82,8 @@ class TestFindCoverageTable:
         ]
         table = _find_coverage_table(lines)
         assert table is not None
-        table_list = cast(list[str], table)
-        assert "Name" in table_list[0]  # pylint: disable=unsubscriptable-object
+        header_line = table[0]
+        assert "Name" in header_line
 
     def test_finds_first_matching_header(self):
         """Test finds first matching coverage header."""

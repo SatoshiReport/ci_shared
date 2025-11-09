@@ -142,10 +142,7 @@ max-branches = 10
 max-statements = 50
 
 [tool.pylint.MAIN]
-init-hook = "import sys; sys.path.append('tests')"
+init-hook = "import sys; sys.path.insert(0, 'tests')"
 
 [tool.pylint."MESSAGES CONTROL"]
 disable = []
-
-[tool.pylint.TYPECHECK]
-ignored-modules = ["conftest"]
