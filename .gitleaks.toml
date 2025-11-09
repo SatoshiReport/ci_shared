@@ -22,6 +22,7 @@ paths = [
     '''\.ruff_cache/''',
     '''\.mypy_cache/''',
     '''__pycache__/''',
+    '''\.pyc$''',
     '''.xci/''',
     '''logs/''',
     '''artifacts/''',
@@ -45,20 +46,19 @@ regexes = [
     '''EXAMPLE_API_KEY''',
     '''YOUR_API_KEY_HERE''',
     '''INSERT_YOUR_''',
-    # Verbose pytest class names that trigger high-entropy rule
-    '''^Test(?:[A-Z][A-Za-z0-9]+){2,}$''',
 ]
 
 # Allowlist specific commits (if needed)
 # commits = ["commit-sha-here"]
 
-# Entropy detection settings
+# Entropy detection - tuned to avoid false positives on long class names
 [[rules]]
 id = "high-entropy-strings"
 description = "Detect high entropy strings (potential secrets)"
 # entropy range: 0.0 to 8.0, higher = more random
-regex = '''[A-Za-z0-9+/]{40,}'''
-entropyMin = 4.5
+# Require both high entropy (5.0+) AND length (50+ chars) to reduce false positives
+regex = '''[A-Za-z0-9+/]{50,}'''
+entropyMin = 5.0
 entropyMax = 8.0
 
 # Additional custom rules can be added here

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from ci_tools.scripts.generate_commit_message import (
     _build_chunk_summary_diff,
@@ -245,7 +243,6 @@ def test_main_uses_env_var_for_model(
     mock_resolve_model,
     mock_request_commit,
     mock_gather_diff,
-    capsys,
 ):
     """Test main uses CI_COMMIT_MODEL env var."""
     mock_gather_diff.return_value = "diff --git a/file.py b/file.py"
@@ -268,7 +265,6 @@ def test_main_uses_env_var_for_reasoning(
     mock_resolve_model,
     mock_request_commit,
     mock_gather_diff,
-    capsys,
 ):
     """Test main uses CI_COMMIT_REASONING env var."""
     mock_gather_diff.return_value = "diff --git a/file.py b/file.py"
@@ -337,10 +333,7 @@ def test_chunk_by_lines_evenly_distributes():
 
 def test_chunk_diff_handles_large_diffs():
     """Chunk diff using section boundaries and fall back to lines."""
-    diff_text = "\n".join(
-        f"diff --git a/file{i}.py b/file{i}.py\n+line {i}\n"
-        for i in range(5)
-    )
+    diff_text = "\n".join(f"diff --git a/file{i}.py b/file{i}.py\n+line {i}\n" for i in range(5))
     chunks = _chunk_diff(diff_text, max_chunk_lines=3, max_chunks=4)
     assert len(chunks) > 1
     combined = "\n\n".join(chunks)
@@ -350,9 +343,7 @@ def test_chunk_diff_handles_large_diffs():
 
 def test_build_chunk_summary_diff_formats_output():
     """Synthesized diff includes chunk headers and summary text."""
-    summary_diff = _build_chunk_summary_diff(
-        [("Added feature", ["- detail a", "- detail b"])]
-    )
+    summary_diff = _build_chunk_summary_diff([("Added feature", ["- detail a", "- detail b"])])
     assert "diff --git a/chunk_1 b/chunk_1" in summary_diff
     assert "+ chunk 1 summary: Added feature" in summary_diff
     assert "- detail a" in summary_diff

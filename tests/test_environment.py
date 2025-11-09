@@ -66,7 +66,7 @@ class TestLoadEnvFile:
         """Test loading nonexistent file returns empty dict."""
         nonexistent = tmp_path / "nonexistent.env"
         result = load_env_file(str(nonexistent))
-        assert result == {}
+        assert not result
 
     def test_load_env_file_empty_file(self, tmp_path):
         """Test loading empty file returns empty dict."""
@@ -74,7 +74,7 @@ class TestLoadEnvFile:
         env_file.write_text("")
 
         result = load_env_file(str(env_file))
-        assert result == {}
+        assert not result
 
     def test_load_env_file_only_comments(self, tmp_path):
         """Test loading file with only comments returns empty dict."""
@@ -82,7 +82,7 @@ class TestLoadEnvFile:
         env_file.write_text("# Comment 1\n# Comment 2\n")
 
         result = load_env_file(str(env_file))
-        assert result == {}
+        assert not result
 
     def test_load_env_file_with_whitespace_only_lines(self, tmp_path):
         """Test loading file with whitespace-only lines."""
@@ -170,7 +170,7 @@ class TestLoadEnvSettings:
 
         assert os.environ.get("NEW_VAR") == "new_value"
 
-    def test_load_env_settings_nonexistent_file(self, tmp_path, monkeypatch):
+    def test_load_env_settings_nonexistent_file(self, tmp_path):
         """Test that load_env_settings handles nonexistent file gracefully."""
         nonexistent = tmp_path / "nonexistent.env"
 

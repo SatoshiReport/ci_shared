@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 # Import all exports from ci.py to verify they're accessible
 from ci_tools.ci import (
     PatchPrompt,
@@ -32,6 +31,18 @@ from ci_tools.ci import (
     truncate_diff_summary,
     truncate_error,
 )
+from ci_tools.ci_runtime.messaging import (
+    request_commit_message as msg_request,
+)
+from ci_tools.ci_runtime.models import PatchPrompt as models_prompt
+from ci_tools.ci_runtime.patching import apply_patch as patching_apply
+from ci_tools.ci_runtime.process import run_command as process_run
+from ci_tools.ci_runtime.workflow import (
+    configure_runtime as workflow_cfg,
+    main as workflow_main,
+)
+from ci_tools.ci_runtime import workflow, process, patching, messaging
+import ci_tools.ci as ci_module
 
 
 class TestCiCompatibilityLayer:
@@ -85,34 +96,26 @@ class TestCiCompatibilityLayer:
 
     def test_main_is_reexported_from_workflow(self):
         """Test that main function is correctly re-exported."""
-        from ci_tools.ci_runtime.workflow import main as workflow_main
         assert main is workflow_main
 
     def test_configure_runtime_is_reexported(self):
         """Test that configure_runtime is correctly re-exported."""
-        from ci_tools.ci_runtime.workflow import configure_runtime as workflow_cfg
         assert configure_runtime is workflow_cfg
 
     def test_run_command_is_reexported(self):
         """Test that run_command is correctly re-exported."""
-        from ci_tools.ci_runtime.process import run_command as process_run
         assert run_command is process_run
 
     def test_apply_patch_is_reexported(self):
         """Test that apply_patch is correctly re-exported."""
-        from ci_tools.ci_runtime.patching import apply_patch as patching_apply
         assert apply_patch is patching_apply
 
     def test_request_commit_message_is_reexported(self):
         """Test that request_commit_message is correctly re-exported."""
-        from ci_tools.ci_runtime.messaging import (
-            request_commit_message as msg_request,
-        )
         assert request_commit_message is msg_request
 
     def test_patch_prompt_model_is_reexported(self):
         """Test that PatchPrompt model is correctly re-exported."""
-        from ci_tools.ci_runtime.models import PatchPrompt as models_prompt
         assert PatchPrompt is models_prompt
 
 
@@ -121,25 +124,21 @@ class TestCiModuleStructure:
 
     def test_module_has_all_attribute(self):
         """Test that ci.py defines __all__ for explicit exports."""
-        import ci_tools.ci as ci_module
         assert hasattr(ci_module, "__all__")
         assert isinstance(ci_module.__all__, list)
         assert len(ci_module.__all__) > 0
 
     def test_all_items_in_all_are_exported(self):
         """Test that every item in __all__ is actually exported."""
-        import ci_tools.ci as ci_module
         for name in ci_module.__all__:
             assert hasattr(ci_module, name), f"{name} in __all__ but not exported"
 
     def test_main_entry_point_in_all(self):
         """Test that main entry point is in __all__."""
-        import ci_tools.ci as ci_module
         assert "main" in ci_module.__all__
 
     def test_core_workflow_functions_in_all(self):
         """Test that core workflow functions are in __all__."""
-        import ci_tools.ci as ci_module
         core_functions = [
             "configure_runtime",
             "perform_dry_run",
@@ -151,21 +150,18 @@ class TestCiModuleStructure:
 
     def test_command_execution_functions_in_all(self):
         """Test that command execution functions are in __all__."""
-        import ci_tools.ci as ci_module
         command_functions = ["run_command", "tail_text"]
         for func in command_functions:
             assert func in ci_module.__all__
 
     def test_git_functions_in_all(self):
         """Test that git helper functions are in __all__."""
-        import ci_tools.ci as ci_module
         git_functions = ["gather_git_diff", "gather_git_status", "gather_file_diff"]
         for func in git_functions:
             assert func in ci_module.__all__
 
     def test_codex_functions_in_all(self):
         """Test that Codex interaction functions are in __all__."""
-        import ci_tools.ci as ci_module
         codex_functions = [
             "invoke_codex",
             "build_codex_command",
@@ -178,7 +174,6 @@ class TestCiModuleStructure:
 
     def test_patch_functions_in_all(self):
         """Test that patch handling functions are in __all__."""
-        import ci_tools.ci as ci_module
         patch_functions = [
             "apply_patch",
             "patch_looks_risky",
@@ -191,7 +186,6 @@ class TestCiModuleStructure:
 
     def test_models_in_all(self):
         """Test that data models are in __all__."""
-        import ci_tools.ci as ci_module
         assert "PatchPrompt" in ci_module.__all__
 
 
@@ -200,17 +194,13 @@ class TestCiIntegration:
 
     def test_can_import_from_ci_module_directly(self):
         """Test that functions can be imported directly from ci_tools.ci."""
-        # This should not raise ImportError
-        from ci_tools.ci import main, configure_runtime, run_command
+        # Verify imports already at module level work
         assert main is not None
         assert configure_runtime is not None
         assert run_command is not None
 
     def test_ci_module_provides_same_interface_as_runtime(self):
         """Test that ci.py provides the same interface as ci_runtime modules."""
-        import ci_tools.ci as ci_module
-        from ci_tools.ci_runtime import workflow, process, patching, messaging
-
         # Verify workflow functions
         assert ci_module.main is workflow.main
         assert ci_module.configure_runtime is workflow.configure_runtime
@@ -228,6 +218,5 @@ class TestCiIntegration:
 
     def test_ci_module_docstring_exists(self):
         """Test that ci.py has a module docstring."""
-        import ci_tools.ci as ci_module
         assert ci_module.__doc__ is not None
         assert len(ci_module.__doc__.strip()) > 0

@@ -1,4 +1,5 @@
 """Tests for the strict Bandit wrapper."""
+
 from __future__ import annotations
 
 import subprocess
@@ -10,6 +11,7 @@ from ci_tools.scripts import bandit_wrapper
 
 
 def test_collect_warning_lines_filters_bandit_logs() -> None:
+    """Test that collect_warning_lines filters Bandit warning messages."""
     logs = """
     [manager] WARNING Test in comment: invalid id
     [tester]    WARNING    nosec encountered (B324)
@@ -22,7 +24,10 @@ def test_collect_warning_lines_filters_bandit_logs() -> None:
     ]
 
 
-def test_run_bandit_returns_underlying_exit_code_when_non_zero(capsys: pytest.CaptureFixture[str]) -> None:
+def test_run_bandit_returns_underlying_exit_code_when_non_zero(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test that run_bandit returns underlying exit code on non-zero."""
     completed = subprocess.CompletedProcess(
         args=["bandit"],
         returncode=3,
@@ -37,7 +42,10 @@ def test_run_bandit_returns_underlying_exit_code_when_non_zero(capsys: pytest.Ca
     assert exit_code == 3
 
 
-def test_run_bandit_fails_when_warning_detected(capsys: pytest.CaptureFixture[str]) -> None:
+def test_run_bandit_fails_when_warning_detected(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test that run_bandit fails when warning is detected."""
     completed = subprocess.CompletedProcess(
         args=["bandit"],
         returncode=0,
@@ -51,7 +59,10 @@ def test_run_bandit_fails_when_warning_detected(capsys: pytest.CaptureFixture[st
     assert exit_code == 1
 
 
-def test_run_bandit_allows_warnings_when_flag_set(capsys: pytest.CaptureFixture[str]) -> None:
+def test_run_bandit_allows_warnings_when_flag_set(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test that run_bandit allows warnings when allow_warnings flag is set."""
     completed = subprocess.CompletedProcess(
         args=["bandit"],
         returncode=0,
@@ -69,13 +80,17 @@ def test_run_bandit_allows_warnings_when_flag_set(capsys: pytest.CaptureFixture[
 
 
 def test_build_parser_defines_custom_module_and_flag() -> None:
+    """Test that build_parser defines custom module and allow_warnings flag."""
     parser = bandit_wrapper.build_parser()
     args = parser.parse_args(["--allow-warnings", "--module", "bandit_beta"])
     assert args.allow_warnings is True
     assert args.module == "bandit_beta"
 
 
-def test_main_invokes_run_bandit_with_parsed_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_invokes_run_bandit_with_parsed_arguments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that main invokes run_bandit with parsed arguments."""
     captured: dict[str, object] = {}
 
     def fake_run(
@@ -99,6 +114,7 @@ def test_main_invokes_run_bandit_with_parsed_arguments(monkeypatch: pytest.Monke
 
 
 def test_main_requires_bandit_arguments() -> None:
+    """Test that main requires at least one bandit argument."""
     with pytest.raises(SystemExit) as excinfo:
         bandit_wrapper.main(["--allow-warnings"])
     assert excinfo.value.code == 2

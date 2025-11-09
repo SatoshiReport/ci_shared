@@ -63,7 +63,8 @@ class DataGuardAllowlistError(RuntimeError):
         super().__init__(f"{self.default_message}: {detail}")
 
 
-def _load_allowlist() -> Dict[str, set[str]]:
+def load_allowlist() -> Dict[str, set[str]]:
+    """Load the data guard allowlist from config file."""
     if not ALLOWLIST_PATH.exists():
         return {"assignments": set(), "comparisons": set(), "dataframe": set()}
     try:
@@ -84,10 +85,11 @@ def _load_allowlist() -> Dict[str, set[str]]:
     }
 
 
-ALLOWLIST = _load_allowlist()
+ALLOWLIST = load_allowlist()
 
 
-def _allowlisted(name: str, category: str) -> bool:
+def allowlisted(name: str, category: str) -> bool:
+    """Check if a name is allowlisted in a given category."""
     group = ALLOWLIST.get(category, set())
     return name in group
 
@@ -116,7 +118,8 @@ def extract_target_names(target: ast.AST) -> Iterable[str]:
         yield target.attr
 
 
-def _is_all_caps_identifier(name: str) -> bool:
+def is_all_caps_identifier(name: str) -> bool:
+    """Check if name is an all-caps identifier (constant)."""
     stripped = name.strip()
     return (
         bool(stripped)
@@ -137,43 +140,47 @@ def literal_value_repr(node: ast.AST | None) -> str:
     return ast.dump(node) if node is not None else "None"
 
 
-def _should_flag_assignment(target_names: Iterable[str], value: ast.AST | None) -> bool:
+def should_flag_assignment(target_names: Iterable[str], value: ast.AST | None) -> bool:
+    """Determine if an assignment should be flagged as a violation."""
     names = [name for name in target_names if name]
     if not names:
         return False
-    if all(_is_all_caps_identifier(name) for name in names):
+    if all(is_all_caps_identifier(name) for name in names):
         return False
-    if any(_allowlisted(name, "assignments") for name in names):
+    if any(allowlisted(name, "assignments") for name in names):
         return False
     if not (value and is_numeric_constant(value)):
         return False
     return value.value not in ALLOWED_NUMERIC_LITERALS
 
 
-def _should_flag_comparison(names: Iterable[str]) -> bool:
+def should_flag_comparison(names: Iterable[str]) -> bool:
+    """Check if a comparison should be flagged as a violation."""
     identifiers = [name for name in names if name]
     if not identifiers:
         return False
-    if all(_is_all_caps_identifier(name) for name in identifiers):
+    if all(is_all_caps_identifier(name) for name in identifiers):
         return False
-    return not any(_allowlisted(name, "comparisons") for name in identifiers)
+    return not any(allowlisted(name, "comparisons") for name in identifiers)
 
 
-def _flatten_assignment_targets(targets: Iterable[ast.AST]) -> list[str]:
+def flatten_assignment_targets(targets: Iterable[ast.AST]) -> list[str]:
+    """Extract all target names from assignment targets."""
     names: list[str] = []
     for target in targets:
         names.extend(extract_target_names(target))
     return names
 
 
-def _contains_sensitive_token(names: Iterable[str]) -> bool:
+def contains_sensitive_token(names: Iterable[str]) -> bool:
+    """Check if any name contains a sensitive token."""
     lowered = [name.lower() for name in names]
     return any(
         token in candidate for candidate in lowered for token in SENSITIVE_NAME_TOKENS
     )
 
 
-def _build_assignment_violation(
+def build_assignment_violation(
     path: Path,
     *,
     target_names: list[str],
@@ -181,9 +188,10 @@ def _build_assignment_violation(
     lineno: int,
     prefix: str,
 ) -> Optional[Violation]:
-    if not target_names or not _contains_sensitive_token(target_names):
+    """Build a violation for a sensitive assignment if applicable."""
+    if not target_names or not contains_sensitive_token(target_names):
         return None
-    if not _should_flag_assignment(target_names, value):
+    if not should_flag_assignment(target_names, value):
         return None
     message = (
         f"{prefix} {literal_value_repr(value)} for {', '.join(sorted(target_names))}"
@@ -191,10 +199,11 @@ def _build_assignment_violation(
     return Violation(path=path, lineno=lineno, message=message)
 
 
-def _assignment_violation_from_node(path: Path, node: ast.AST) -> Optional[Violation]:
+def assignment_violation_from_node(path: Path, node: ast.AST) -> Optional[Violation]:
+    """Extract assignment violation from an AST node if applicable."""
     if isinstance(node, ast.Assign):
-        names = _flatten_assignment_targets(node.targets)
-        return _build_assignment_violation(
+        names = flatten_assignment_targets(node.targets)
+        return build_assignment_violation(
             path,
             target_names=names,
             value=node.value,
@@ -203,7 +212,7 @@ def _assignment_violation_from_node(path: Path, node: ast.AST) -> Optional[Viola
         )
     if isinstance(node, ast.AnnAssign):
         names = list(extract_target_names(node.target))
-        return _build_assignment_violation(
+        return build_assignment_violation(
             path,
             target_names=names,
             value=node.value,
@@ -213,16 +222,17 @@ def _assignment_violation_from_node(path: Path, node: ast.AST) -> Optional[Viola
     return None
 
 
-def _iter_sensitive_assignment_violations(
+def iter_sensitive_assignment_violations(
     path: Path, tree: ast.AST
 ) -> Iterator[Violation]:
+    """Iterate over all assignment violations in a file."""
     for node in iter_ast_nodes(tree, (ast.Assign, ast.AnnAssign)):
-        violation = _assignment_violation_from_node(path, node)
+        violation = assignment_violation_from_node(path, node)
         if violation:
             yield violation
 
 
-def _collect_violations_from_iterator(
+def collect_violations_from_iterator(
     iterator_func: Callable[[Path, ast.AST], Iterator[Violation]],
 ) -> List[Violation]:
     """Generic collector that applies an iterator function to all Python files."""
@@ -237,25 +247,25 @@ def _collect_violations_from_iterator(
 
 def collect_sensitive_assignments() -> List[Violation]:
     """Collect violations for assignments with sensitive data patterns."""
-    return _collect_violations_from_iterator(_iter_sensitive_assignment_violations)
+    return collect_violations_from_iterator(iter_sensitive_assignment_violations)
 
 
-def _call_contains_literal_arguments(node: ast.Call) -> bool:
+def call_contains_literal_arguments(node: ast.Call) -> bool:
+    """Check if a call contains literal dataset arguments."""
     arguments = list(node.args) + [kw.value for kw in node.keywords]
     return any(contains_literal_dataset(arg) for arg in arguments)
 
 
-def _iter_dataframe_literal_violations(
-    path: Path, tree: ast.AST
-) -> Iterator[Violation]:
+def iter_dataframe_literal_violations(path: Path, tree: ast.AST) -> Iterator[Violation]:
+    """Iterate over DataFrame literal violations in a file."""
     for node in iter_ast_nodes(tree, ast.Call):
         assert isinstance(node, ast.Call)  # Type narrowing for pyright
         qualname = get_call_qualname(node.func)
         if not qualname or qualname not in DATAFRAME_CALLS:
             continue
-        if _allowlisted(qualname, "dataframe"):
+        if allowlisted(qualname, "dataframe"):
             continue
-        if _call_contains_literal_arguments(node):
+        if call_contains_literal_arguments(node):
             yield Violation(
                 path=path,
                 lineno=node.lineno,
@@ -265,10 +275,11 @@ def _iter_dataframe_literal_violations(
 
 def collect_dataframe_literals() -> List[Violation]:
     """Collect violations for DataFrame operations with literal values."""
-    return _collect_violations_from_iterator(_iter_dataframe_literal_violations)
+    return collect_violations_from_iterator(iter_dataframe_literal_violations)
 
 
-def _literal_comparators(node: ast.Compare) -> list[ast.Constant]:
+def literal_comparators(node: ast.Compare) -> list[ast.Constant]:
+    """Extract literal comparators from a comparison node."""
     return [
         comp
         for comp in node.comparators
@@ -276,16 +287,18 @@ def _literal_comparators(node: ast.Compare) -> list[ast.Constant]:
     ]
 
 
-def _comparison_targets(node: ast.Compare) -> list[str]:
+def comparison_targets(node: ast.Compare) -> list[str]:
+    """Extract comparison targets from a comparison node."""
     if isinstance(node.left, ast.Name):
         return [node.left.id]
     return []
 
 
-def _format_comparison_message(
+def format_comparison_message(
     comparator_literals: list[ast.Constant],
     left_names: list[str],
 ) -> str:
+    """Format a comparison violation message."""
     literal_repr = ", ".join(literal_value_repr(comp) for comp in comparator_literals)
     return (
         "comparison against literal "
@@ -294,29 +307,30 @@ def _format_comparison_message(
     )
 
 
-def _iter_numeric_comparison_violations(
+def iter_numeric_comparison_violations(
     path: Path, tree: ast.AST
 ) -> Iterator[Violation]:
+    """Iterate over numeric comparison violations in a file."""
     for node in iter_ast_nodes(tree, ast.Compare):
         assert isinstance(node, ast.Compare)  # Type narrowing for pyright
-        comparator_literals = _literal_comparators(node)
+        comparator_literals = literal_comparators(node)
         if not comparator_literals:
             continue
-        left_names = _comparison_targets(node)
-        if not left_names or not _contains_sensitive_token(left_names):
+        left_names = comparison_targets(node)
+        if not left_names or not contains_sensitive_token(left_names):
             continue
-        if not _should_flag_comparison(left_names):
+        if not should_flag_comparison(left_names):
             continue
         yield Violation(
             path=path,
             lineno=node.lineno,
-            message=_format_comparison_message(comparator_literals, left_names),
+            message=format_comparison_message(comparator_literals, left_names),
         )
 
 
 def collect_numeric_comparisons() -> List[Violation]:
     """Collect violations for numeric comparisons with literal values."""
-    return _collect_violations_from_iterator(_iter_numeric_comparison_violations)
+    return collect_violations_from_iterator(iter_numeric_comparison_violations)
 
 
 def collect_all_violations() -> List[Violation]:

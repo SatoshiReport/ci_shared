@@ -1,3 +1,5 @@
+"""Unit tests for function_size_guard module."""
+
 from __future__ import annotations
 
 import argparse
@@ -7,10 +9,9 @@ from unittest.mock import patch
 
 import pytest
 
-from ci_tools.scripts import function_size_guard
-from ci_tools.scripts.guard_common import is_excluded, iter_python_files, count_ast_node_lines
-
 from conftest import write_module
+from ci_tools.scripts import function_size_guard
+from ci_tools.scripts.guard_common import count_ast_node_lines
 
 
 def test_parse_args_defaults():
@@ -31,58 +32,6 @@ def test_parse_args_custom_values():
     assert args.root == Path("custom")
     assert args.max_function_lines == 50
     assert args.exclude == [Path("tests")]
-
-
-def test_iter_python_files_single_file(tmp_path: Path):
-    """Test iter_python_files with a single file."""
-    py_file = tmp_path / "test.py"
-    py_file.write_text("# test")
-
-    files = list(iter_python_files(py_file))
-    assert len(files) == 1
-    assert files[0] == py_file
-
-
-def test_iter_python_files_non_python_file(tmp_path: Path):
-    """Test iter_python_files with a non-Python file."""
-    txt_file = tmp_path / "test.txt"
-    txt_file.write_text("# test")
-
-    files = list(iter_python_files(txt_file))
-    assert len(files) == 0
-
-
-def test_iter_python_files_directory(tmp_path: Path):
-    """Test iter_python_files with a directory."""
-    (tmp_path / "file1.py").write_text("# file1")
-    (tmp_path / "file2.py").write_text("# file2")
-    (tmp_path / "subdir").mkdir()
-    (tmp_path / "subdir" / "file3.py").write_text("# file3")
-
-    files = list(iter_python_files(tmp_path))
-    assert len(files) == 3
-
-
-def test_is_excluded_basic():
-    """Test basic exclusion logic."""
-    path = Path("/project/src/module.py").resolve()
-    exclusions = [Path("/project/src").resolve()]
-    assert is_excluded(path, exclusions) is True
-
-
-def test_is_excluded_no_match():
-    """Test exclusion with no match."""
-    path = Path("/project/src/module.py").resolve()
-    exclusions = [Path("/project/tests").resolve()]
-    assert is_excluded(path, exclusions) is False
-
-
-def test_is_excluded_handles_attribute_error():
-    """Test is_excluded handles AttributeError correctly."""
-    path = Path("/project/src/module.py")
-    exclusions = [Path("/other/path")]
-    result = is_excluded(path, exclusions)
-    assert result is False
 
 
 def test_count_function_lines_basic():
@@ -251,7 +200,9 @@ def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(
+            ["--root", str(root), "--max-function-lines", "10"]
+        )
 
     assert result == 0
     captured = capsys.readouterr()
@@ -269,7 +220,9 @@ def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
     py_file.write_text(content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(
+            ["--root", str(root), "--max-function-lines", "10"]
+        )
 
     assert result == 1
     captured = capsys.readouterr()
@@ -309,7 +262,9 @@ def test_main_handles_multiple_violations(tmp_path: Path, capsys: pytest.Capture
     (root / "file2.py").write_text(large_func)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(
+            ["--root", str(root), "--max-function-lines", "10"]
+        )
 
     assert result == 1
     captured = capsys.readouterr()
@@ -327,7 +282,9 @@ def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFix
     (root / "alpha.py").write_text(large_func)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(
+            ["--root", str(root), "--max-function-lines", "10"]
+        )
 
     assert result == 1
     captured = capsys.readouterr()
@@ -406,7 +363,9 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     (root / "module.py").write_text(large_func)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = function_size_guard.FunctionSizeGuard.main(["--root", str(root), "--max-function-lines", "10"])
+        result = function_size_guard.FunctionSizeGuard.main(
+            ["--root", str(root), "--max-function-lines", "10"]
+        )
 
     assert result == 1
     captured = capsys.readouterr()
@@ -414,20 +373,6 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert "large" in captured.err
 
 
-def test_iter_python_files_empty_directory(tmp_path: Path):
-    """Test iter_python_files with empty directory."""
-    files = list(iter_python_files(tmp_path))
-    assert len(files) == 0
-
-
-def test_is_excluded_multiple_exclusions():
-    """Test exclusion with multiple patterns."""
-    path = Path("/project/tests/test_module.py").resolve()
-    exclusions = [
-        Path("/project/vendor").resolve(),
-        Path("/project/tests").resolve(),
-    ]
-    assert is_excluded(path, exclusions) is True
 
 
 def test_count_function_lines_single_line():
@@ -452,5 +397,3 @@ def test_scan_file_with_decorators(tmp_path: Path):
     violations = guard.scan_file(py_file, args)
     assert len(violations) == 1
     assert "decorated_func" in violations[0]
-
-

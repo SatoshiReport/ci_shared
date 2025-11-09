@@ -346,7 +346,7 @@ class TestGatherFileDiff:
 class TestLogCodexInteraction:
     """Tests for log_codex_interaction function."""
 
-    def test_creates_log_directory(self, tmp_path):
+    def test_creates_log_directory(self):
         """Test creates logs directory if it doesn't exist."""
         with patch("ci_tools.ci_runtime.process.Path") as mock_path:
             mock_log_dir = MagicMock()

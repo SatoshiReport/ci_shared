@@ -21,11 +21,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from ci_tools.scripts.guard_common import (
-    iter_ast_nodes,
-    iter_python_files,
-    parse_python_ast,
-)
+from ci_tools.scripts.cli_detection import is_cli_entry_point
+from ci_tools.scripts.guard_common import iter_python_files, parse_python_ast
 
 
 class ImportCollector(ast.NodeVisitor):  # pylint: disable=invalid-name
@@ -171,7 +168,7 @@ FALSE_POSITIVE_RULES: Dict[str, Tuple[str, ...]] = {
 }
 
 
-def _is_false_positive_for_pattern(stem: str, pattern: str) -> bool:
+def is_false_positive_for_pattern(stem: str, pattern: str) -> bool:
     """Check if a stem matches false positive rules for a specific pattern."""
     if pattern in FALSE_POSITIVE_RULES:
         # Check if any exclusion marker is in the stem
@@ -181,12 +178,12 @@ def _is_false_positive_for_pattern(stem: str, pattern: str) -> bool:
     return False
 
 
-def _duplicate_reason(stem: str) -> Optional[str]:
+def duplicate_reason(stem: str) -> Optional[str]:
     """Check if a stem contains suspicious patterns, accounting for false positives."""
     for pattern in SUSPICIOUS_PATTERNS:
         if pattern in stem:
             # Check if this is a false positive for this specific pattern
-            if not _is_false_positive_for_pattern(stem, pattern):
+            if not is_false_positive_for_pattern(stem, pattern):
                 return f"Suspicious duplicate pattern '{pattern}' in filename"
     return None
 
@@ -204,14 +201,15 @@ def find_suspicious_duplicates(root: Path) -> List[Tuple[Path, str]]:
     duplicates: List[Tuple[Path, str]] = []
 
     for py_file in iter_python_files(root):
-        reason = _duplicate_reason(py_file.stem)
+        reason = duplicate_reason(py_file.stem)
         if reason:
             duplicates.append((py_file, reason))
 
     return duplicates
 
 
-def _collect_all_imports_with_parent(root: Path) -> Set[str]:
+def collect_all_imports_with_parent(root: Path) -> Set[str]:
+    """Collect all imports from root and parent directory."""
     imports = collect_all_imports(root)
     parent = root.parent
     if parent.exists():
@@ -219,51 +217,8 @@ def _collect_all_imports_with_parent(root: Path) -> Set[str]:
     return imports
 
 
-def _is_main_guard_node(node: ast.If) -> bool:
-    """Check if an If node is a '__name__ == "__main__"' guard."""
-    if not isinstance(node.test, ast.Compare):
-        return False
-    if not isinstance(node.test.left, ast.Name):
-        return False
-    if node.test.left.id != "__name__":
-        return False
-    if len(node.test.comparators) != 1:
-        return False
-    comparator = node.test.comparators[0]
-    return isinstance(comparator, ast.Constant) and comparator.value == "__main__"
-
-
-def _has_main_function(tree: ast.AST) -> bool:
-    """Check if AST contains a main() function definition."""
-    return any(
-        isinstance(node, ast.FunctionDef) and node.name == "main"
-        for node in iter_ast_nodes(tree, ast.FunctionDef)
-    )
-
-
-def _has_main_guard(tree: ast.AST) -> bool:
-    """Check if AST contains if __name__ == '__main__' pattern."""
-    return any(
-        isinstance(node, ast.If) and _is_main_guard_node(node)
-        for node in iter_ast_nodes(tree, ast.If)
-    )
-
-
-def _is_cli_entry_point(py_file: Path) -> bool:
-    """
-    Check if a file is a CLI entry point (has main() and if __name__ == "__main__").
-
-    CLI entry points are meant to be executed directly (e.g., python -m module)
-    rather than imported, so they don't need to appear in import statements.
-    """
-    tree = parse_python_ast(py_file, raise_on_error=False)
-    if tree is None:
-        return False
-
-    return _has_main_guard(tree) and _has_main_function(tree)
-
-
-def _should_skip_file(py_file: Path, exclude_patterns: List[str]) -> bool:
+def should_skip_file(py_file: Path, exclude_patterns: List[str]) -> bool:
+    """Check if a file should be skipped during unused module detection."""
     # Defense in depth: skip __pycache__ even though iter_python_files filters it
     if "__pycache__" in str(py_file):
         return True
@@ -272,11 +227,11 @@ def _should_skip_file(py_file: Path, exclude_patterns: List[str]) -> bool:
     # Skip __main__.py and main.py as they are entry points
     if py_file.name in ("__main__.py", "main.py"):
         return True
-    # Skip CLI entry points (files with main() and if __name__ == "__main__")
-    return _is_cli_entry_point(py_file)
+    # Skip CLI entry points (both module-level and class-based patterns)
+    return is_cli_entry_point(py_file)
 
 
-def _check_exact_match(
+def check_exact_match(
     module_name: str, file_stem: str, all_imports: Set[str], root: Path
 ) -> bool:
     """Check for exact module name matches."""
@@ -292,7 +247,7 @@ def _check_exact_match(
     return False
 
 
-def _check_child_imported(module_name: str, all_imports: Set[str]) -> bool:
+def check_child_imported(module_name: str, all_imports: Set[str]) -> bool:
     """Check if any child module is imported."""
     for imported in all_imports:
         if imported.startswith(module_name + "."):
@@ -302,7 +257,7 @@ def _check_child_imported(module_name: str, all_imports: Set[str]) -> bool:
     return False
 
 
-def _has_specific_child_imports(
+def has_specific_child_imports(
     parent: str, module_name: str, all_imports: Set[str]
 ) -> bool:
     """Check if parent has specific child imports that exclude this module."""
@@ -311,33 +266,34 @@ def _has_specific_child_imports(
     )
 
 
-def _check_parent_imported(module_name: str, all_imports: Set[str]) -> bool:
+def check_parent_imported(module_name: str, all_imports: Set[str]) -> bool:
     """Check if a parent module is imported wholesale."""
     module_parts = module_name.split(".")
     for i in range(len(module_parts) - 1):
         parent = ".".join(module_parts[: i + 1])
         if parent in all_imports or f"src.{parent}" in all_imports:
-            if not _has_specific_child_imports(parent, module_name, all_imports):
+            if not has_specific_child_imports(parent, module_name, all_imports):
                 return True
     return False
 
 
-def _module_is_imported(
+def module_is_imported(
     module_name: str,
     file_stem: str,
     all_imports: Set[str],
     root: Path,
 ) -> bool:
+    """Check if a module is imported anywhere in the codebase."""
     if not module_name:
         return True
 
-    if _check_exact_match(module_name, file_stem, all_imports, root):
+    if check_exact_match(module_name, file_stem, all_imports, root):
         return True
 
-    if _check_child_imported(module_name, all_imports):
+    if check_child_imported(module_name, all_imports):
         return True
 
-    if _check_parent_imported(module_name, all_imports):
+    if check_parent_imported(module_name, all_imports):
         return True
 
     return False
@@ -357,15 +313,15 @@ def find_unused_modules(
         List of (file_path, reason) tuples for unused modules
     """
     exclude_patterns = list(exclude_patterns or [])
-    all_imports = _collect_all_imports_with_parent(root)
+    all_imports = collect_all_imports_with_parent(root)
     unused: List[Tuple[Path, str]] = []
 
     for py_file in iter_python_files(root):
-        if _should_skip_file(py_file, exclude_patterns):
+        if should_skip_file(py_file, exclude_patterns):
             continue
 
         module_name = get_module_name(py_file, root)
-        if _module_is_imported(module_name, py_file.stem, all_imports, root):
+        if module_is_imported(module_name, py_file.stem, all_imports, root):
             continue
 
         unused.append((py_file, f"Never imported (module: {module_name})"))

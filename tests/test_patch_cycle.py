@@ -151,9 +151,7 @@ class TestValidatePatchCandidate:
         diff_text = "diff --git a/file.py b/file.py"
         seen_patches = set()
 
-        _validate_patch_candidate(
-            diff_text, seen_patches=seen_patches, max_patch_lines=1500
-        )
+        _validate_patch_candidate(diff_text, seen_patches=seen_patches, max_patch_lines=1500)
 
         assert diff_text in seen_patches
 
@@ -176,9 +174,7 @@ class TestApplyPatchCandidate:
     @patch("ci_tools.ci_runtime.patch_cycle.apply_patch")
     def test_returns_false_on_retryable_error(self, mock_apply):
         """Test returning False when patch apply fails with retryable error."""
-        mock_apply.side_effect = PatchApplyError(
-            detail="git apply failed", retryable=True
-        )
+        mock_apply.side_effect = PatchApplyError(detail="git apply failed", retryable=True)
         diff_text = "diff --git a/file.py b/file.py"
         state = PatchAttemptState(max_attempts=3)
 
@@ -191,9 +187,7 @@ class TestApplyPatchCandidate:
     @patch("ci_tools.ci_runtime.patch_cycle.apply_patch")
     def test_returns_false_on_non_retryable_error(self, mock_apply):
         """Test returning False when patch apply fails with non-retryable error."""
-        mock_apply.side_effect = PatchApplyError(
-            detail="fatal error", retryable=False
-        )
+        mock_apply.side_effect = PatchApplyError(detail="fatal error", retryable=False)
         diff_text = "diff --git a/file.py b/file.py"
         state = PatchAttemptState(max_attempts=3)
 
@@ -226,7 +220,9 @@ class TestApplyPatchCandidate:
 
         _apply_patch_candidate(diff_text, state=state)
 
-        state.record_failure.assert_called_once_with("Patch application failed: fail", retryable=True)
+        state.record_failure.assert_called_once_with(
+            "Patch application failed: fail", retryable=True
+        )
 
 
 class TestShouldApplyPatch:
@@ -247,28 +243,28 @@ class TestShouldApplyPatch:
         mock_input.assert_called_once()
 
     @patch("builtins.input", return_value="yes")
-    def test_prompt_mode_accepts_yes_word(self, mock_input):
+    def test_prompt_mode_accepts_yes_word(self, _mock_input):
         """Test prompt mode accepts 'yes'."""
         result = _should_apply_patch(approval_mode="prompt", attempt=2)
 
         assert result is True
 
     @patch("builtins.input", return_value="")
-    def test_prompt_mode_accepts_empty_input(self, mock_input):
+    def test_prompt_mode_accepts_empty_input(self, _mock_input):
         """Test prompt mode accepts empty input as yes."""
         result = _should_apply_patch(approval_mode="prompt", attempt=1)
 
         assert result is True
 
     @patch("builtins.input", return_value="n")
-    def test_prompt_mode_rejects_no(self, mock_input):
+    def test_prompt_mode_rejects_no(self, _mock_input):
         """Test prompt mode rejects 'n'."""
         result = _should_apply_patch(approval_mode="prompt", attempt=1)
 
         assert result is False
 
     @patch("builtins.input", return_value="q")
-    def test_prompt_mode_quit_raises_abort(self, mock_input):
+    def test_prompt_mode_quit_raises_abort(self, _mock_input):
         """Test prompt mode raises abort on 'q'."""
         with pytest.raises(PatchLifecycleAbort) as exc_info:
             _should_apply_patch(approval_mode="prompt", attempt=1)
@@ -276,20 +272,20 @@ class TestShouldApplyPatch:
         assert "user declined" in str(exc_info.value)
 
     @patch("builtins.input", return_value="quit")
-    def test_prompt_mode_quit_word_raises_abort(self, mock_input):
+    def test_prompt_mode_quit_word_raises_abort(self, _mock_input):
         """Test prompt mode raises abort on 'quit'."""
         with pytest.raises(PatchLifecycleAbort):
             _should_apply_patch(approval_mode="prompt", attempt=1)
 
     @patch("builtins.input", return_value="  YES  ")
-    def test_prompt_mode_strips_and_lowercases(self, mock_input):
+    def test_prompt_mode_strips_and_lowercases(self, _mock_input):
         """Test prompt mode strips whitespace and lowercases."""
         result = _should_apply_patch(approval_mode="prompt", attempt=1)
 
         assert result is True
 
     @patch("builtins.input", return_value="invalid")
-    def test_prompt_mode_rejects_invalid_input(self, mock_input):
+    def test_prompt_mode_rejects_invalid_input(self, _mock_input):
         """Test prompt mode rejects invalid input."""
         result = _should_apply_patch(approval_mode="prompt", attempt=1)
 
@@ -305,6 +301,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_successful_patch_on_first_attempt(
         self,
         mock_apply,
@@ -352,6 +349,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_retries_on_validation_error(
         self,
         mock_apply,
@@ -398,6 +396,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_retries_when_user_declines(
         self,
         mock_apply,
@@ -445,6 +444,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_retries_when_apply_fails(
         self,
         mock_apply,
@@ -491,6 +491,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_raises_when_budget_exhausted(
         self,
         mock_apply,
@@ -538,6 +539,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_shows_post_patch_status_when_not_clean(
         self,
         mock_apply,
@@ -587,6 +589,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_shows_clean_message_when_no_status(
         self,
         mock_apply,
@@ -628,6 +631,7 @@ class TestRequestAndApplyPatches:
 
         captured = capsys.readouterr()
         assert "Working tree is clean" in captured.out
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
 
     @patch("ci_tools.ci_runtime.patch_cycle.gather_git_diff")
     @patch("ci_tools.ci_runtime.patch_cycle.gather_git_status")
@@ -635,6 +639,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_passes_correct_patch_prompt(
         self,
         mock_apply,
@@ -682,6 +687,7 @@ class TestRequestAndApplyPatches:
         assert prompt.git_diff == "current diff"
         assert prompt.git_status == "git status"
         assert prompt.iteration == 2
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
         assert prompt.attempt == 1
 
     @patch("ci_tools.ci_runtime.patch_cycle.gather_git_diff")
@@ -690,6 +696,7 @@ class TestRequestAndApplyPatches:
     @patch("ci_tools.ci_runtime.patch_cycle._validate_patch_candidate")
     @patch("ci_tools.ci_runtime.patch_cycle._should_apply_patch")
     @patch("ci_tools.ci_runtime.patch_cycle._apply_patch_candidate")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_includes_previous_error_in_prompt(
         self,
         mock_apply,
@@ -761,6 +768,7 @@ class TestRequestAndApplyPatches:
                 args=args,
                 options=options,
                 failure_ctx=failure_ctx,
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
                 iteration=1,
                 seen_patches=seen_patches,
             )

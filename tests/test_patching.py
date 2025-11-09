@@ -81,9 +81,7 @@ diff --git a/file.py
 --- a/ci_tools/module.py
 +++ b/ci_tools/module.py
 """
-        with patch(
-            "ci_tools.ci_runtime.patching.PROTECTED_PATH_PREFIXES", ("ci_tools/",)
-        ):
+        with patch("ci_tools.ci_runtime.patching.PROTECTED_PATH_PREFIXES", ("ci_tools/",)):
             paths = _extract_diff_paths(patch_text)
             assert "ci_tools/module.py" in paths
 
@@ -116,9 +114,7 @@ class TestPatchLooksRisky:
 -old
 +new
 """
-        with patch(
-            "ci_tools.ci_runtime.patching.PROTECTED_PATH_PREFIXES", ("ci.py",)
-        ):
+        with patch("ci_tools.ci_runtime.patching.PROTECTED_PATH_PREFIXES", ("ci.py",)):
             risky, reason = patch_looks_risky(patch_text, max_lines=1000)
             assert risky is True
             assert reason is not None
@@ -151,9 +147,7 @@ class TestPatchLooksRisky:
 +def new():
 """
         with patch("ci_tools.ci_runtime.patching.PROTECTED_PATH_PREFIXES", ("ci.py",)):
-            with patch(
-                "ci_tools.ci_runtime.patching.risky_pattern_in_diff"
-            ) as mock_risky:
+            with patch("ci_tools.ci_runtime.patching.risky_pattern_in_diff") as mock_risky:
                 mock_risky.return_value = None
                 risky, reason = patch_looks_risky(patch_text, max_lines=1000)
                 assert risky is False
@@ -209,16 +203,14 @@ class TestApplyPatchWithGit:
                 Mock(returncode=0, stdout="", stderr=""),  # git apply --check
                 Mock(returncode=0, stdout="Applied patch", stderr=""),  # git apply
             ]
-            applied, diagnostics = _apply_patch_with_git("diff content")
+            applied, _diagnostics = _apply_patch_with_git("diff content")
             assert applied is True
             assert mock_run.call_count == 2
 
     def test_git_apply_check_fails(self):
         """Test when git apply --check fails."""
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = Mock(
-                returncode=1, stdout="", stderr="error: patch failed"
-            )
+            mock_run.return_value = Mock(returncode=1, stdout="", stderr="error: patch failed")
             applied, diagnostics = _apply_patch_with_git("diff content")
             assert applied is False
             assert "error: patch failed" in diagnostics
@@ -303,9 +295,7 @@ class TestApplyPatchWithPatchTool:
     def test_dry_run_failure_raises_error(self):
         """Test dry run failure raises PatchApplyError."""
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = Mock(
-                returncode=1, stdout="", stderr="dry run failed"
-            )
+            mock_run.return_value = Mock(returncode=1, stdout="", stderr="dry run failed")
             with pytest.raises(PatchApplyError) as exc_info:
                 _apply_patch_with_patch_tool("diff", check_output="check failed")
             assert "dry-run" in str(exc_info.value).lower()
@@ -367,21 +357,15 @@ class TestApplyPatch:
 
     def test_applies_with_git_when_possible(self):
         """Test prefers git apply when it works."""
-        with patch(
-            "ci_tools.ci_runtime.patching._apply_patch_with_git"
-        ) as mock_git_apply:
+        with patch("ci_tools.ci_runtime.patching._apply_patch_with_git") as mock_git_apply:
             mock_git_apply.return_value = (True, "")
             apply_patch("diff content")
             mock_git_apply.assert_called_once()
 
     def test_falls_back_to_patch_tool_when_git_fails(self):
         """Test falls back to patch utility when git fails."""
-        with patch(
-            "ci_tools.ci_runtime.patching._apply_patch_with_git"
-        ) as mock_git_apply:
-            with patch(
-                "ci_tools.ci_runtime.patching._patch_already_applied"
-            ) as mock_already:
+        with patch("ci_tools.ci_runtime.patching._apply_patch_with_git") as mock_git_apply:
+            with patch("ci_tools.ci_runtime.patching._patch_already_applied") as mock_already:
                 with patch(
                     "ci_tools.ci_runtime.patching._apply_patch_with_patch_tool"
                 ) as mock_patch_tool:
@@ -392,12 +376,8 @@ class TestApplyPatch:
 
     def test_skips_when_already_applied(self):
         """Test skips application when patch already applied."""
-        with patch(
-            "ci_tools.ci_runtime.patching._apply_patch_with_git"
-        ) as mock_git_apply:
-            with patch(
-                "ci_tools.ci_runtime.patching._patch_already_applied"
-            ) as mock_already:
+        with patch("ci_tools.ci_runtime.patching._apply_patch_with_git") as mock_git_apply:
+            with patch("ci_tools.ci_runtime.patching._patch_already_applied") as mock_already:
                 with patch(
                     "ci_tools.ci_runtime.patching._apply_patch_with_patch_tool"
                 ) as mock_patch_tool:
@@ -408,9 +388,7 @@ class TestApplyPatch:
 
     def test_ensures_trailing_newline(self):
         """Test ensures patch has trailing newline."""
-        with patch(
-            "ci_tools.ci_runtime.patching._apply_patch_with_git"
-        ) as mock_git_apply:
+        with patch("ci_tools.ci_runtime.patching._apply_patch_with_git") as mock_git_apply:
             mock_git_apply.return_value = (True, "")
             apply_patch("diff without newline")
             call_args = mock_git_apply.call_args[0][0]
@@ -418,12 +396,8 @@ class TestApplyPatch:
 
     def test_propagates_patch_apply_errors(self):
         """Test propagates PatchApplyError exceptions."""
-        with patch(
-            "ci_tools.ci_runtime.patching._apply_patch_with_git"
-        ) as mock_git_apply:
-            with patch(
-                "ci_tools.ci_runtime.patching._patch_already_applied"
-            ) as mock_already:
+        with patch("ci_tools.ci_runtime.patching._apply_patch_with_git") as mock_git_apply:
+            with patch("ci_tools.ci_runtime.patching._patch_already_applied") as mock_already:
                 with patch(
                     "ci_tools.ci_runtime.patching._apply_patch_with_patch_tool"
                 ) as mock_patch_tool:
@@ -437,12 +411,8 @@ class TestApplyPatch:
 
     def test_handles_empty_check_output(self):
         """Test handles empty check output from git."""
-        with patch(
-            "ci_tools.ci_runtime.patching._apply_patch_with_git"
-        ) as mock_git_apply:
-            with patch(
-                "ci_tools.ci_runtime.patching._patch_already_applied"
-            ) as mock_already:
+        with patch("ci_tools.ci_runtime.patching._apply_patch_with_git") as mock_git_apply:
+            with patch("ci_tools.ci_runtime.patching._patch_already_applied") as mock_already:
                 with patch(
                     "ci_tools.ci_runtime.patching._apply_patch_with_patch_tool"
                 ) as mock_patch_tool:

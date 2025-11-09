@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -237,9 +237,7 @@ def test_commit_and_push_update_push_failure(tmp_path):
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
         mock_run.side_effect = [
-            subprocess.CompletedProcess(
-                args=["git", "commit"], returncode=0, stdout="", stderr=""
-            ),
+            subprocess.CompletedProcess(args=["git", "commit"], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(
                 args=["git", "push"], returncode=1, stdout="", stderr="error"
             ),
@@ -276,9 +274,7 @@ def test_update_submodule_in_repo_invalid_state(tmp_path):
     repo_path = tmp_path / "repo"
     with patch("ci_tools.scripts.propagate_ci_shared._validate_repo_state") as mock:
         mock.return_value = False
-        result = update_submodule_in_repo(
-            repo_path, "Test commit", source_root=tmp_path
-        )
+        result = update_submodule_in_repo(repo_path, "Test commit", source_root=tmp_path)
         assert result is False
 
 
@@ -289,9 +285,7 @@ def test_update_submodule_in_repo_no_changes(tmp_path):
         with patch("ci_tools.scripts.propagate_ci_shared._sync_repo_configs") as mock2:
             mock1.return_value = True
             mock2.return_value = False
-            result = update_submodule_in_repo(
-                repo_path, "Test commit", source_root=tmp_path
-            )
+            result = update_submodule_in_repo(repo_path, "Test commit", source_root=tmp_path)
             assert result is False
 
 
@@ -300,15 +294,11 @@ def test_update_submodule_in_repo_success(tmp_path):
     repo_path = tmp_path / "repo"
     with patch("ci_tools.scripts.propagate_ci_shared._validate_repo_state") as mock1:
         with patch("ci_tools.scripts.propagate_ci_shared._sync_repo_configs") as mock2:
-            with patch(
-                "ci_tools.scripts.propagate_ci_shared._commit_and_push_update"
-            ) as mock3:
+            with patch("ci_tools.scripts.propagate_ci_shared._commit_and_push_update") as mock3:
                 mock1.return_value = True
                 mock2.return_value = True
                 mock3.return_value = True
-                result = update_submodule_in_repo(
-                    repo_path, "Test commit", source_root=tmp_path
-                )
+                result = update_submodule_in_repo(repo_path, "Test commit", source_root=tmp_path)
                 assert result is True
 
 
@@ -319,9 +309,7 @@ def test_process_repositories(tmp_path):
         ConsumingRepo("kalshi", tmp_path / "kalshi"),
         ConsumingRepo("aws", tmp_path / "aws"),
     ]
-    with patch(
-        "ci_tools.scripts.propagate_ci_shared.update_submodule_in_repo"
-    ) as mock_update:
+    with patch("ci_tools.scripts.propagate_ci_shared.update_submodule_in_repo") as mock_update:
         mock_update.side_effect = [True, False, Exception("error")]
         updated, skipped, failed = _process_repositories(repos, "Test commit", tmp_path)
         assert updated == ["zeus"]
@@ -376,9 +364,7 @@ def test_main_success_with_updates(tmp_path, monkeypatch):
 
     with patch("ci_tools.scripts.propagate_ci_shared.get_latest_commit_message") as mock1:
         with patch("ci_tools.utils.consumers.load_consuming_repos") as mock_load:
-            with patch(
-                "ci_tools.scripts.propagate_ci_shared._process_repositories"
-            ) as mock2:
+            with patch("ci_tools.scripts.propagate_ci_shared._process_repositories") as mock2:
                 mock1.return_value = "Test commit"
                 mock_load.return_value = [ConsumingRepo("api", tmp_path / "api")]
                 mock2.return_value = (["zeus"], ["kalshi"], [])
@@ -396,9 +382,7 @@ def test_main_with_failures(tmp_path, monkeypatch):
 
     with patch("ci_tools.scripts.propagate_ci_shared.get_latest_commit_message") as mock1:
         with patch("ci_tools.utils.consumers.load_consuming_repos") as mock_load:
-            with patch(
-                "ci_tools.scripts.propagate_ci_shared._process_repositories"
-            ) as mock2:
+            with patch("ci_tools.scripts.propagate_ci_shared._process_repositories") as mock2:
                 mock1.return_value = "Test commit"
                 mock_load.return_value = [ConsumingRepo("api", tmp_path / "api")]
                 mock2.return_value = ([], [], ["aws"])

@@ -136,7 +136,7 @@ class TestStreamOutput:
         stdout_lines, stderr_lines = _stream_output(mock_process)
 
         assert stdout_lines == ["output\n"]
-        assert stderr_lines == []
+        assert not stderr_lines
 
     def test_handles_stderr_only(self):
         """Test streaming when only stderr exists."""
@@ -149,7 +149,7 @@ class TestStreamOutput:
 
         stdout_lines, stderr_lines = _stream_output(mock_process)
 
-        assert stdout_lines == []
+        assert not stdout_lines
         assert stderr_lines == ["error\n"]
 
     def test_handles_no_streams(self):
@@ -160,8 +160,8 @@ class TestStreamOutput:
 
         stdout_lines, stderr_lines = _stream_output(mock_process)
 
-        assert stdout_lines == []
-        assert stderr_lines == []
+        assert not stdout_lines
+        assert not stderr_lines
 
 
 class TestInvokeCodex:
@@ -194,7 +194,7 @@ class TestInvokeCodex:
 
     @patch("ci_tools.ci_runtime.codex.log_codex_interaction")
     @patch("subprocess.Popen")
-    def test_invocation_without_assistant_prefix(self, mock_popen, mock_log):
+    def test_invocation_without_assistant_prefix(self, mock_popen, _mock_log):
         """Test invocation when response doesn't have assistant prefix."""
         mock_process = MagicMock()
         mock_process.wait.return_value = 0
@@ -218,7 +218,7 @@ class TestInvokeCodex:
 
     @patch("ci_tools.ci_runtime.codex.log_codex_interaction")
     @patch("subprocess.Popen")
-    def test_invocation_with_error(self, mock_popen, mock_log):
+    def test_invocation_with_error(self, mock_popen, _mock_log):
         """Test invocation when Codex CLI returns error."""
         mock_process = MagicMock()
         mock_process.wait.return_value = 1
@@ -243,7 +243,7 @@ class TestInvokeCodex:
 
     @patch("ci_tools.ci_runtime.codex.log_codex_interaction")
     @patch("subprocess.Popen")
-    def test_invocation_returns_stderr_when_no_stdout(self, mock_popen, mock_log):
+    def test_invocation_returns_stderr_when_no_stdout(self, mock_popen, _mock_log):
         """Test that stderr is returned when stdout is empty."""
         mock_process = MagicMock()
         mock_process.wait.return_value = 0
@@ -566,17 +566,17 @@ diff --git a/file.py b/file.py
 +added line
  more context
 """
-        exceeded, message = truncate_diff_summary(diff, line_limit=10)
+        exceeded, _message = truncate_diff_summary(diff, line_limit=10)
         assert exceeded is False
 
     def test_exact_limit_boundary(self):
         """Test behavior at exact limit boundary."""
         diff = "\n".join(["+line" for _ in range(10)])
-        exceeded, message = truncate_diff_summary(diff, line_limit=10)
+        exceeded, _message = truncate_diff_summary(diff, line_limit=10)
         assert exceeded is False
 
         diff = "\n".join(["+line" for _ in range(11)])
-        exceeded, message = truncate_diff_summary(diff, line_limit=10)
+        exceeded, _message = truncate_diff_summary(diff, line_limit=10)
         assert exceeded is True
 
 

@@ -10,10 +10,12 @@ from ci_tools.utils.consumers import load_consuming_repos
 
 
 def write_config(tmp_path: Path, data: str) -> None:
+    """Helper to write a test configuration file."""
     (tmp_path / "ci_shared.config.json").write_text(data, encoding="utf-8")
 
 
-def test_load_from_config_with_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_load_from_config_with_paths(tmp_path: Path):
+    """Test loading consuming repositories from config with explicit paths."""
     write_config(
         tmp_path,
         """
@@ -32,6 +34,7 @@ def test_load_from_config_with_paths(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_load_from_config_with_strings(tmp_path: Path):
+    """Test loading consuming repositories from config with string names."""
     write_config(
         tmp_path,
         """
@@ -44,6 +47,7 @@ def test_load_from_config_with_strings(tmp_path: Path):
 
 
 def test_load_from_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Test that environment variable overrides the config file."""
     write_config(
         tmp_path,
         """
@@ -60,6 +64,7 @@ def test_load_from_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 def test_load_defaults_when_config_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Test that defaults are used when config file is missing."""
     monkeypatch.delenv("CI_SHARED_PROJECTS", raising=False)
     repos = load_consuming_repos(tmp_path)
     # Defaults are deterministic and include at least API.

@@ -1,3 +1,5 @@
+"""Unit tests for coverage_guard module."""
+
 from __future__ import annotations
 
 import sys
@@ -54,47 +56,27 @@ class TestCoverageResult:
 
     def test_coverage_result_percent_normal(self) -> None:
         """Test coverage percentage calculation."""
-        result = coverage_guard.CoverageResult(
-            path=Path("test.py"),
-            statements=100,
-            missing=20
-        )
+        result = coverage_guard.CoverageResult(path=Path("test.py"), statements=100, missing=20)
         assert result.percent == 80.0
 
     def test_coverage_result_percent_zero_statements(self) -> None:
         """Test coverage with zero statements."""
-        result = coverage_guard.CoverageResult(
-            path=Path("test.py"),
-            statements=0,
-            missing=0
-        )
+        result = coverage_guard.CoverageResult(path=Path("test.py"), statements=0, missing=0)
         assert result.percent == 100.0
 
     def test_coverage_result_percent_full_coverage(self) -> None:
         """Test 100% coverage."""
-        result = coverage_guard.CoverageResult(
-            path=Path("test.py"),
-            statements=50,
-            missing=0
-        )
+        result = coverage_guard.CoverageResult(path=Path("test.py"), statements=50, missing=0)
         assert result.percent == 100.0
 
     def test_coverage_result_percent_no_coverage(self) -> None:
         """Test 0% coverage."""
-        result = coverage_guard.CoverageResult(
-            path=Path("test.py"),
-            statements=50,
-            missing=50
-        )
+        result = coverage_guard.CoverageResult(path=Path("test.py"), statements=50, missing=50)
         assert result.percent == 0.0
 
     def test_coverage_result_frozen(self) -> None:
         """Test that CoverageResult is frozen."""
-        result = coverage_guard.CoverageResult(
-            path=Path("test.py"),
-            statements=100,
-            missing=20
-        )
+        result = coverage_guard.CoverageResult(path=Path("test.py"), statements=100, missing=20)
 
         with pytest.raises(Exception):  # FrozenInstanceError
             result.statements = 50  # type: ignore[misc]
@@ -127,11 +109,9 @@ class TestParseArgs:
 
     def test_parse_args_multiple_includes(self) -> None:
         """Test multiple include paths."""
-        args = coverage_guard.parse_args([
-            "--include", "src",
-            "--include", "lib",
-            "--include", "tests"
-        ])
+        args = coverage_guard.parse_args(
+            ["--include", "src", "--include", "lib", "--include", "tests"]
+        )
         assert "src" in args.include
         assert "lib" in args.include
         assert "tests" in args.include
@@ -144,12 +124,18 @@ class TestParseArgs:
 
     def test_parse_args_combined_options(self) -> None:
         """Test combining multiple options."""
-        args = coverage_guard.parse_args([
-            "--threshold", "85",
-            "--data-file", ".coverage.test",
-            "--include", "src",
-            "--include", "lib"
-        ])
+        args = coverage_guard.parse_args(
+            [
+                "--threshold",
+                "85",
+                "--data-file",
+                ".coverage.test",
+                "--include",
+                "src",
+                "--include",
+                "lib",
+            ]
+        )
         assert args.threshold == 85.0
         assert args.data_file == ".coverage.test"
         assert "src" in args.include
@@ -178,14 +164,18 @@ class TestResolveDataFile:
             result = coverage_guard.resolve_data_file(None)
             assert result == (tmp_path / ".coverage").resolve()
 
-    def test_resolve_data_file_from_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_resolve_data_file_from_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test reading from COVERAGE_FILE environment variable."""
         monkeypatch.setenv("COVERAGE_FILE", ".coverage.env")
         with patch.object(coverage_guard, "ROOT", tmp_path):
             result = coverage_guard.resolve_data_file(None)
             assert result == (tmp_path / ".coverage.env").resolve()
 
-    def test_resolve_data_file_candidate_overrides_env(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_resolve_data_file_candidate_overrides_env(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Test that explicit candidate overrides environment."""
         monkeypatch.setenv("COVERAGE_FILE", ".coverage.env")
         with patch.object(coverage_guard, "ROOT", tmp_path):
@@ -216,7 +206,7 @@ class TestNormalizePrefixes:
         """Test normalizing empty list."""
         with patch.object(coverage_guard, "ROOT", tmp_path):
             result = coverage_guard.normalize_prefixes([])
-            assert result == []
+            assert not result
 
     def test_normalize_prefixes_absolute_paths(self, tmp_path: Path) -> None:
         """Test normalizing absolute paths."""
@@ -271,10 +261,7 @@ class TestShouldInclude:
             file2 = tmp_path / "lib" / "util.py"
             file3 = tmp_path / "other" / "file.py"
 
-            prefixes = [
-                (tmp_path / "src").resolve(),
-                (tmp_path / "lib").resolve()
-            ]
+            prefixes = [(tmp_path / "src").resolve(), (tmp_path / "lib").resolve()]
 
             assert coverage_guard.should_include(file1, prefixes)
             assert coverage_guard.should_include(file2, prefixes)
@@ -284,7 +271,7 @@ class TestShouldInclude:
 class TestCollectResults:
     """Test collecting coverage results."""
 
-    def test_collect_results_no_data(self, tmp_path: Path) -> None:
+    def test_collect_results_no_data(self) -> None:
         """Test when no coverage data exists."""
         mock_cov = Mock(spec=Coverage)
         mock_cov.load.side_effect = NoDataError("No data")
@@ -294,7 +281,7 @@ class TestCollectResults:
 
         assert "no data found" in str(exc_info.value)
 
-    def test_collect_results_empty_data(self, tmp_path: Path) -> None:
+    def test_collect_results_empty_data(self) -> None:
         """Test with empty coverage data."""
         mock_cov = Mock(spec=Coverage)
         mock_data = Mock()
@@ -304,7 +291,7 @@ class TestCollectResults:
         mock_cov.get_data.return_value = mock_data
 
         results = coverage_guard.collect_results(mock_cov, [])
-        assert results == []
+        assert not results
 
     def test_collect_results_single_file(self, tmp_path: Path) -> None:
         """Test collecting results for single file."""
@@ -320,7 +307,7 @@ class TestCollectResults:
             [1, 2, 3, 4, 5],  # statements (line numbers)
             None,
             [3, 5],  # missing (line numbers)
-            None
+            None,
         )
 
         mock_cov.load.return_value = None
@@ -347,8 +334,7 @@ class TestCollectResults:
         def analysis_side_effect(filename):
             if "module1" in filename:
                 return (None, [1, 2, 3], None, [1], None)
-            else:
-                return (None, [1, 2, 3, 4], None, [2, 4], None)
+            return (None, [1, 2, 3, 4], None, [2, 4], None)
 
         mock_cov.analysis2.side_effect = analysis_side_effect
         mock_cov.load.return_value = None
@@ -410,11 +396,7 @@ class TestCollectResults:
         mock_cov = Mock(spec=Coverage)
         mock_data = Mock()
 
-        files = [
-            str(tmp_path / "zebra.py"),
-            str(tmp_path / "alpha.py"),
-            str(tmp_path / "beta.py")
-        ]
+        files = [str(tmp_path / "zebra.py"), str(tmp_path / "alpha.py"), str(tmp_path / "beta.py")]
         mock_data.measured_files.return_value = files
 
         mock_cov.analysis2.return_value = (None, [1, 2], None, [1], None)
@@ -431,7 +413,9 @@ class TestCollectResults:
 class TestMainFunction:
     """Test main function and CLI behavior."""
 
-    def test_main_data_file_not_found(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_data_file_not_found(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test main when coverage data file doesn't exist."""
         with patch.object(coverage_guard, "ROOT", tmp_path):
             result = coverage_guard.main(["--data-file", str(tmp_path / ".coverage.missing")])
@@ -440,7 +424,7 @@ class TestMainFunction:
         captured = capsys.readouterr()
         assert "coverage data file not found" in captured.err
 
-    def test_main_all_files_pass(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_all_files_pass(self, tmp_path: Path) -> None:
         """Test main when all files meet threshold."""
         data_file = tmp_path / ".coverage"
         data_file.write_text("")  # Create empty file
@@ -489,7 +473,9 @@ class TestMainFunction:
         assert "low_coverage.py" in captured.err
         assert "50.00%" in captured.err
 
-    def test_main_coverage_exception(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_coverage_exception(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test main when coverage raises exception."""
         data_file = tmp_path / ".coverage"
         data_file.write_text("")
@@ -567,8 +553,7 @@ class TestMainFunction:
         def analysis_side_effect(filename):
             if "src" in filename:
                 return (None, list(range(10)), None, [9], None)  # 90%
-            else:
-                return (None, list(range(10)), None, list(range(5)), None)  # 50%
+            return (None, list(range(10)), None, list(range(5)), None)  # 50%
 
         mock_cov.analysis2.side_effect = analysis_side_effect
         mock_cov.load.return_value = None
@@ -577,11 +562,9 @@ class TestMainFunction:
         with patch.object(coverage_guard, "ROOT", tmp_path):
             with patch("ci_tools.scripts.coverage_guard.Coverage", return_value=mock_cov):
                 # Only check src
-                result = coverage_guard.main([
-                    "--threshold", "80",
-                    "--data-file", str(data_file),
-                    "--include", "src"
-                ])
+                result = coverage_guard.main(
+                    ["--threshold", "80", "--data-file", str(data_file), "--include", "src"]
+                )
 
         # Should pass because we're only checking src
         assert result == 0
@@ -617,7 +600,13 @@ class TestMainFunction:
 
         # Coverage that's very close to threshold
         # 79.99999% should fail against 80% threshold
-        mock_cov.analysis2.return_value = (None, list(range(100000)), None, list(range(20001)), None)
+        mock_cov.analysis2.return_value = (
+            None,
+            list(range(100000)),
+            None,
+            list(range(20001)),
+            None,
+        )
         mock_cov.load.return_value = None
         mock_cov.get_data.return_value = mock_data
 
@@ -628,7 +617,9 @@ class TestMainFunction:
         # The 1e-9 tolerance should allow near-misses to pass
         # With 20001 missing out of 100000, we have 79.999% which should pass
 
-    def test_main_none_argv_uses_sys_argv(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_main_none_argv_uses_sys_argv(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that argv=None uses sys.argv."""
         data_file = tmp_path / ".coverage"
         data_file.write_text("")
@@ -652,11 +643,7 @@ class TestEdgeCases:
 
     def test_coverage_result_with_rounding(self) -> None:
         """Test coverage percentage with rounding."""
-        result = coverage_guard.CoverageResult(
-            path=Path("test.py"),
-            statements=3,
-            missing=1
-        )
+        result = coverage_guard.CoverageResult(path=Path("test.py"), statements=3, missing=1)
         # 2/3 = 66.666...%
         assert abs(result.percent - 66.666666) < 0.001
 
@@ -667,7 +654,9 @@ class TestEdgeCases:
             prefixes = [(tmp_path / "src").resolve()]
             assert coverage_guard.should_include(deep_file, prefixes)
 
-    def test_multiple_failures_reported(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_multiple_failures_reported(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that all failures are reported."""
         data_file = tmp_path / ".coverage"
         data_file.write_text("")
@@ -695,7 +684,9 @@ class TestEdgeCases:
         assert "module2.py" in captured.err
         assert "module3.py" in captured.err
 
-    def test_relative_path_display(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_relative_path_display(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that paths are displayed relative to root."""
         data_file = tmp_path / ".coverage"
         data_file.write_text("")

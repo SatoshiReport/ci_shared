@@ -1,3 +1,5 @@
+"""Unit tests for complexity_guard module."""
+
 from __future__ import annotations
 
 import sys
@@ -6,12 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from ci_tools.scripts import complexity_guard
 from conftest import write_module
+from ci_tools.scripts import complexity_guard
 from ci_tools.test_constants import get_constant
 
 
 def test_calculate_cognitive_complexity_counts_nested_branches() -> None:
+    """Test that cognitive complexity is calculated correctly for nested branches."""
     source = textwrap.dedent(
         """
         def sample(x: int) -> int:
@@ -29,6 +32,7 @@ def test_calculate_cognitive_complexity_counts_nested_branches() -> None:
 
 
 def test_check_file_complexity_detects_violation(tmp_path: Path) -> None:
+    """Test that complexity violations are detected in files."""
     target = tmp_path / "violations.py"
     write_module(
         target,
@@ -47,6 +51,7 @@ def test_check_file_complexity_detects_violation(tmp_path: Path) -> None:
 
 
 def test_check_file_complexity_ignores_simple_function(tmp_path: Path) -> None:
+    """Test that simple functions pass complexity checks."""
     target = tmp_path / "clean.py"
     write_module(
         target,
@@ -56,17 +61,21 @@ def test_check_file_complexity_ignores_simple_function(tmp_path: Path) -> None:
         """,
     )
     results = complexity_guard.check_file_complexity(target, max_cyclomatic=2, max_cognitive=2)
-    assert results == []
+    assert not results
 
 
 def run_main(monkeypatch: pytest.MonkeyPatch, args: list[str]) -> int:
+    """Helper to run the main function with specified arguments."""
     monkeypatch.setattr(sys, "argv", ["complexity_guard.py", *args])
     with pytest.raises(SystemExit) as exc:
         complexity_guard.main()
     return int(exc.value.code) if exc.value.code is not None else 0
 
 
-def test_main_rejects_missing_root(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_rejects_missing_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that main rejects a missing root directory."""
     missing = tmp_path / "missing"
     code = run_main(monkeypatch, ["--root", str(missing)])
     assert code == 1
@@ -74,7 +83,10 @@ def test_main_rejects_missing_root(tmp_path: Path, capsys: pytest.CaptureFixture
     assert "does not exist" in captured.err
 
 
-def test_main_reports_violation(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_reports_violation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that main reports complexity violations."""
     root = tmp_path / "pkg"
     root.mkdir()
     write_module(
@@ -96,7 +108,10 @@ def test_main_reports_violation(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert "bad.py" in captured.out
 
 
-def test_main_succeeds_without_violations(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_succeeds_without_violations(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that main succeeds when there are no violations."""
     root = tmp_path / "pkg"
     root.mkdir()
     write_module(

@@ -1,3 +1,5 @@
+"""Unit tests for dependency_guard module."""
+
 from __future__ import annotations
 
 import ast
@@ -7,46 +9,11 @@ from unittest.mock import patch
 
 import pytest
 
-from ci_tools.scripts import dependency_guard
-from ci_tools.scripts.guard_common import is_excluded, iter_python_files
-
 from conftest import write_module
+from ci_tools.scripts import dependency_guard
 
 
-def test_iter_python_files_single_file(tmp_path: Path):
-    """Test iter_python_files with a single file."""
-    py_file = tmp_path / "test.py"
-    py_file.write_text("# test")
-
-    files = list(iter_python_files(py_file))
-    assert len(files) == 1
-    assert files[0] == py_file
-
-
-def test_iter_python_files_non_python_file(tmp_path: Path):
-    """Test iter_python_files with a non-Python file."""
-    txt_file = tmp_path / "test.txt"
-    txt_file.write_text("# test")
-
-    files = list(iter_python_files(txt_file))
-    assert len(files) == 0
-
-
-def test_is_excluded_basic():
-    """Test basic exclusion logic."""
-    path = Path("/project/src/module.py").resolve()
-    exclusions = [Path("/project/src").resolve()]
-    assert is_excluded(path, exclusions) is True
-
-
-def test_is_excluded_no_match():
-    """Test exclusion with no match."""
-    path = Path("/project/src/module.py").resolve()
-    exclusions = [Path("/project/tests").resolve()]
-    assert is_excluded(path, exclusions) is False
-
-
-def test_callee_name_simple():
+def testcallee_name_simple():
     """Test extracting callee name from simple call."""
     source = "Foo()"
     tree = ast.parse(source)
@@ -55,11 +22,11 @@ def test_callee_name_simple():
     assert isinstance(stmt.value, ast.Call)
     call_node = stmt.value
 
-    name = dependency_guard._callee_name(call_node)
+    name = dependency_guard.callee_name(call_node)
     assert name == "Foo"
 
 
-def test_callee_name_attribute():
+def testcallee_name_attribute():
     """Test extracting callee name from attribute call."""
     source = "module.Foo()"
     tree = ast.parse(source)
@@ -68,11 +35,11 @@ def test_callee_name_attribute():
     assert isinstance(stmt.value, ast.Call)
     call_node = stmt.value
 
-    name = dependency_guard._callee_name(call_node)
+    name = dependency_guard.callee_name(call_node)
     assert name == "Foo"
 
 
-def test_callee_name_complex():
+def testcallee_name_complex():
     """Test extracting callee name from complex expression."""
     source = "(foo if condition else bar)()"
     tree = ast.parse(source)
@@ -81,30 +48,30 @@ def test_callee_name_complex():
     assert isinstance(stmt.value, ast.Call)
     call_node = stmt.value
 
-    name = dependency_guard._callee_name(call_node)
+    name = dependency_guard.callee_name(call_node)
     assert name is None
 
 
-def test_is_constructor_name_valid():
+def testis_constructor_name_valid():
     """Test is_constructor_name with valid constructor names."""
-    assert dependency_guard._is_constructor_name("Foo") is True
-    assert dependency_guard._is_constructor_name("MyClass") is True
-    assert dependency_guard._is_constructor_name("HTTPClient") is True
+    assert dependency_guard.is_constructor_name("Foo") is True
+    assert dependency_guard.is_constructor_name("MyClass") is True
+    assert dependency_guard.is_constructor_name("HTTPClient") is True
 
 
-def test_is_constructor_name_invalid():
+def testis_constructor_name_invalid():
     """Test is_constructor_name with invalid names."""
-    assert dependency_guard._is_constructor_name("foo") is False
-    assert dependency_guard._is_constructor_name("myFunc") is False
-    assert dependency_guard._is_constructor_name("") is False
+    assert dependency_guard.is_constructor_name("foo") is False
+    assert dependency_guard.is_constructor_name("myFunc") is False
+    assert dependency_guard.is_constructor_name("") is False
 
 
-def test_is_constructor_name_skipped():
+def testis_constructor_name_skipped():
     """Test is_constructor_name skips certain names."""
-    assert dependency_guard._is_constructor_name("Path") is False
-    assert dependency_guard._is_constructor_name("List") is False
-    assert dependency_guard._is_constructor_name("Dict") is False
-    assert dependency_guard._is_constructor_name("Optional") is False
+    assert dependency_guard.is_constructor_name("Path") is False
+    assert dependency_guard.is_constructor_name("List") is False
+    assert dependency_guard.is_constructor_name("Dict") is False
+    assert dependency_guard.is_constructor_name("Optional") is False
 
 
 def test_count_instantiations_basic():
@@ -184,7 +151,7 @@ def test_count_instantiations_no_instantiations():
     count, classes = dependency_guard.count_instantiations(stmt)
 
     assert count == 0
-    assert classes == []
+    assert not classes
 
 
 def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
@@ -202,7 +169,9 @@ def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = dependency_guard.DependencyGuard.main(["--root", str(root), "--max-instantiations", "5"])
+        result = dependency_guard.DependencyGuard.main(
+            ["--root", str(root), "--max-instantiations", "5"]
+        )
 
     assert result == 0
     captured = capsys.readouterr()
@@ -215,14 +184,14 @@ def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
     root.mkdir()
     py_file = root / "complex.py"
 
-    instantiations = "\n".join(
-        [f"        self.service{i} = Service{i}()" for i in range(15)]
-    )
+    instantiations = "\n".join([f"        self.service{i} = Service{i}()" for i in range(15)])
     content = f"class Complex:\n    def __init__(self):\n{instantiations}"
     py_file.write_text(content)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = dependency_guard.DependencyGuard.main(["--root", str(root), "--max-instantiations", "5"])
+        result = dependency_guard.DependencyGuard.main(
+            ["--root", str(root), "--max-instantiations", "5"]
+        )
 
     assert result == 1
     captured = capsys.readouterr()
@@ -266,7 +235,9 @@ def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFix
     (root / "alpha.py").write_text(many_deps)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = dependency_guard.DependencyGuard.main(["--root", str(root), "--max-instantiations", "5"])
+        result = dependency_guard.DependencyGuard.main(
+            ["--root", str(root), "--max-instantiations", "5"]
+        )
 
     assert result == 1
     captured = capsys.readouterr()
@@ -331,20 +302,17 @@ def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixtu
     (root / "module.py").write_text(many_deps)
 
     with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = dependency_guard.DependencyGuard.main(["--root", str(root), "--max-instantiations", "5"])
+        result = dependency_guard.DependencyGuard.main(
+            ["--root", str(root), "--max-instantiations", "5"]
+        )
 
     assert result == 1
     captured = capsys.readouterr()
     assert "module.py" in captured.err
 
 
-def test_iter_python_files_empty_directory(tmp_path: Path):
-    """Test iter_python_files with empty directory."""
-    files = list(iter_python_files(tmp_path))
-    assert len(files) == 0
 
-
-def test_callee_name_subscript():
+def testcallee_name_subscript():
     """Test callee name with subscript expression."""
     source = "foo[0]()"
     tree = ast.parse(source)
@@ -353,7 +321,7 @@ def test_callee_name_subscript():
     assert isinstance(stmt.value, ast.Call)
     call_node = stmt.value
 
-    name = dependency_guard._callee_name(call_node)
+    name = dependency_guard.callee_name(call_node)
     assert name is None
 
 

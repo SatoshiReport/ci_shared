@@ -30,9 +30,9 @@ class TestFindCoverageTable:
         table = _find_coverage_table(lines)
         assert table is not None
         assert len(table) > 1
-        header_line = table[0]
-        assert "Name" in header_line
-        assert "Cover" in header_line
+        table_list = list(table)  # Convert to list to make pylint happy
+        assert "Name" in table_list[0]
+        assert "Cover" in table_list[0]
 
     def test_returns_none_when_no_header_found(self):
         """Test returns None when no coverage header found."""
@@ -53,8 +53,9 @@ class TestFindCoverageTable:
         table = _find_coverage_table(lines)
         assert table is not None
         assert len(table) == COVERAGE_CONSTANTS["table_row_count"]
-        assert "file1.py" in table[2]
-        assert "file2.py" in table[3]
+        table_list = list(table)  # Convert to list to make pylint happy
+        assert "file1.py" in table_list[2]
+        assert "file2.py" in table_list[3]
 
     def test_handles_table_at_end_of_output(self):
         """Test handles coverage table at end of output."""
@@ -82,8 +83,8 @@ class TestFindCoverageTable:
         ]
         table = _find_coverage_table(lines)
         assert table is not None
-        header_line = table[0]
-        assert "Name" in header_line
+        table_list = list(table)
+        assert "Name" in table_list[0]
 
     def test_finds_first_matching_header(self):
         """Test finds first matching coverage header."""
@@ -390,9 +391,7 @@ class TestCoverageCheckResult:
             CoverageDeficit("file2.py", 60.0),
             CoverageDeficit("file3.py", 70.0),
         ]
-        result = CoverageCheckResult(
-            table_text="table", deficits=deficits, threshold=80.0
-        )
+        result = CoverageCheckResult(table_text="table", deficits=deficits, threshold=80.0)
         assert len(result.deficits) == 3
         assert result.deficits[0].coverage == 50.0
         assert result.deficits[2].coverage == 70.0

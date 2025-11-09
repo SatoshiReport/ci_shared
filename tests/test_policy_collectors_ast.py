@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import ast
-import textwrap
-from pathlib import Path
 
+import pytest
 
+from conftest import (
+    assert_collector_finds_issue,
+    assert_collector_finds_reason,
+    write_module,
+)
 from ci_tools.scripts.policy_collectors_ast import (
     collect_backward_compat_blocks,
     collect_bool_fallbacks,
@@ -22,8 +26,6 @@ from ci_tools.scripts.policy_collectors_ast import (
     purge_bytecode_artifacts,
 )
 from ci_tools.scripts.policy_context import contains_literal_dataset
-
-from conftest import write_module
 
 
 def test_contains_literal_dataset_constant():
@@ -98,12 +100,12 @@ def test_contains_literal_dataset_false():
     assert contains_literal_dataset(stmt.value) is False
 
 
-def test_collect_long_functions(tmp_path, monkeypatch):
+def test_collect_long_functions(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_long_functions finds oversized functions."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -136,11 +138,10 @@ def test_collect_long_functions(tmp_path, monkeypatch):
     assert any(entry.name == "long_function" for entry in results)
 
 
-def test_collect_long_functions_skips_init(tmp_path, monkeypatch):
+def test_collect_long_functions_skips_init(policy_root):
     """Test collect_long_functions skips __init__.py files."""
-    src_root = tmp_path / "src"
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
         src_root / "__init__.py",
@@ -164,12 +165,12 @@ def test_collect_long_functions_skips_init(tmp_path, monkeypatch):
     assert len(results) == 0
 
 
-def test_collect_broad_excepts(tmp_path, monkeypatch):
+def test_collect_broad_excepts(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_broad_excepts finds broad exception handlers."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -185,11 +186,10 @@ def test_collect_broad_excepts(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_broad_excepts_with_suppression(tmp_path, monkeypatch):
+def test_collect_broad_excepts_with_suppression(policy_root):
     """Test collect_broad_excepts respects suppression comments."""
-    src_root = tmp_path / "src"
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -207,12 +207,12 @@ def test_collect_broad_excepts_with_suppression(tmp_path, monkeypatch):
     assert len(matching) == 0
 
 
-def test_collect_broad_excepts_bare_except(tmp_path, monkeypatch):
+def test_collect_broad_excepts_bare_except(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_broad_excepts finds bare except."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -228,12 +228,12 @@ def test_collect_broad_excepts_bare_except(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_broad_excepts_tuple(tmp_path, monkeypatch):
+def test_collect_broad_excepts_tuple(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_broad_excepts finds Exception in tuple."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -249,12 +249,12 @@ def test_collect_broad_excepts_tuple(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_silent_handlers(tmp_path, monkeypatch):
+def test_collect_silent_handlers(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_silent_handlers finds silent exception handlers."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -271,11 +271,10 @@ def test_collect_silent_handlers(tmp_path, monkeypatch):
     assert any("pass" in reason for _, _, reason in results)
 
 
-def test_collect_silent_handlers_with_suppression(tmp_path, monkeypatch):
+def test_collect_silent_handlers_with_suppression(policy_root):
     """Test collect_silent_handlers respects suppression comments."""
-    src_root = tmp_path / "src"
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -292,12 +291,12 @@ def test_collect_silent_handlers_with_suppression(tmp_path, monkeypatch):
     assert len(matching) == 0
 
 
-def test_collect_generic_raises(tmp_path, monkeypatch):
+def test_collect_generic_raises(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_generic_raises finds generic exception raises."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -311,12 +310,12 @@ def test_collect_generic_raises(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_generic_raises_base_exception(tmp_path, monkeypatch):
+def test_collect_generic_raises_base_exception(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_generic_raises finds BaseException."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -330,12 +329,11 @@ def test_collect_generic_raises_base_exception(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_literal_fallbacks_dict_get(tmp_path, monkeypatch):
+def test_collect_literal_fallbacks_dict_get(policy_root):
     """Test collect_literal_fallbacks finds dict.get with literal default."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
-        tmp_path / "module.py",
+        policy_root / "module.py",
         """
         x = data.get('key', 'default')
         """,
@@ -346,12 +344,11 @@ def test_collect_literal_fallbacks_dict_get(tmp_path, monkeypatch):
     assert any("get literal fallback" in reason for _, _, reason in results)
 
 
-def test_collect_literal_fallbacks_getattr(tmp_path, monkeypatch):
+def test_collect_literal_fallbacks_getattr(policy_root):
     """Test collect_literal_fallbacks finds getattr with literal default."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
-        tmp_path / "module.py",
+        policy_root / "module.py",
         """
         x = getattr(obj, 'attr', 'default')
         """,
@@ -361,12 +358,11 @@ def test_collect_literal_fallbacks_getattr(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_literal_fallbacks_os_getenv(tmp_path, monkeypatch):
+def test_collect_literal_fallbacks_os_getenv(policy_root):
     """Test collect_literal_fallbacks finds os.getenv with literal default."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
-        tmp_path / "module.py",
+        policy_root / "module.py",
         """
         import os
         x = os.getenv('VAR', 'default')
@@ -377,12 +373,12 @@ def test_collect_literal_fallbacks_os_getenv(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_literal_fallbacks_setdefault(tmp_path, monkeypatch):
+def test_collect_literal_fallbacks_setdefault(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_literal_fallbacks finds setdefault with literal."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -395,108 +391,76 @@ def test_collect_literal_fallbacks_setdefault(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_bool_fallbacks_or(tmp_path, monkeypatch):
+def test_collect_bool_fallbacks_or(policy_root):
     """Test collect_bool_fallbacks finds literal fallback via or."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-
-    write_module(
-        tmp_path / "module.py",
-        """
-        x = value or 'default'
-        """,
+    assert_collector_finds_issue(
+        collect_bool_fallbacks,
+        "x = value or 'default'",
+        root_path=policy_root,
     )
 
-    results = collect_bool_fallbacks()
-    assert len(results) >= 1
 
-
-def test_collect_bool_fallbacks_ternary(tmp_path, monkeypatch):
+def test_collect_bool_fallbacks_ternary(policy_root):
     """Test collect_bool_fallbacks finds literal in ternary."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-
-    write_module(
-        tmp_path / "module.py",
-        """
-        x = 'yes' if condition else 'no'
-        """,
+    assert_collector_finds_issue(
+        collect_bool_fallbacks,
+        "x = 'yes' if condition else 'no'",
+        root_path=policy_root,
     )
 
-    results = collect_bool_fallbacks()
-    assert len(results) >= 1
 
-
-def test_collect_conditional_literal_returns(tmp_path, monkeypatch):
+def test_collect_conditional_literal_returns(policy_root):
     """Test collect_conditional_literal_returns finds literal returns after None check."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-
-    write_module(
-        tmp_path / "module.py",
+    assert_collector_finds_issue(
+        collect_conditional_literal_returns,
         """
         def foo(x):
             if x is None:
                 return 'default'
         """,
+        root_path=policy_root,
     )
 
-    results = collect_conditional_literal_returns()
-    assert len(results) >= 1
 
-
-def test_collect_backward_compat_blocks_if_statement(tmp_path, monkeypatch):
+def test_collect_backward_compat_blocks_if_statement(policy_root):
     """Test collect_backward_compat_blocks finds legacy if statements."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-
-    write_module(
-        tmp_path / "module.py",
+    assert_collector_finds_reason(
+        collect_backward_compat_blocks,
         """
         if legacy_mode:
             handle_legacy()
         """,
+        "conditional legacy guard",
+        root_path=policy_root,
     )
 
-    results = collect_backward_compat_blocks()
-    assert len(results) >= 1
-    assert any("conditional legacy guard" in reason for _, _, reason in results)
 
-
-def test_collect_backward_compat_blocks_attribute(tmp_path, monkeypatch):
+def test_collect_backward_compat_blocks_attribute(policy_root):
     """Test collect_backward_compat_blocks finds legacy attributes."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-
-    write_module(
-        tmp_path / "module.py",
-        """
-        x = obj.method_legacy()
-        """,
+    assert_collector_finds_reason(
+        collect_backward_compat_blocks,
+        "x = obj.method_legacy()",
+        "legacy attribute",
+        root_path=policy_root,
     )
 
-    results = collect_backward_compat_blocks()
-    assert len(results) >= 1
-    assert any("legacy attribute" in reason for _, _, reason in results)
 
-
-def test_collect_backward_compat_blocks_name(tmp_path, monkeypatch):
+def test_collect_backward_compat_blocks_name(policy_root):
     """Test collect_backward_compat_blocks finds legacy symbols."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-
-    write_module(
-        tmp_path / "module.py",
-        """
-        x = func_deprecated()
-        """,
+    assert_collector_finds_reason(
+        collect_backward_compat_blocks,
+        "x = func_deprecated()",
+        "legacy symbol",
+        root_path=policy_root,
     )
 
-    results = collect_backward_compat_blocks()
-    assert len(results) >= 1
-    assert any("legacy symbol" in reason for _, _, reason in results)
 
-
-def test_collect_forbidden_sync_calls_time_sleep(tmp_path, monkeypatch):
+def test_collect_forbidden_sync_calls_time_sleep(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_forbidden_sync_calls finds time.sleep."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -511,12 +475,12 @@ def test_collect_forbidden_sync_calls_time_sleep(tmp_path, monkeypatch):
     assert any("time.sleep" in reason for _, _, reason in results)
 
 
-def test_collect_forbidden_sync_calls_subprocess(tmp_path, monkeypatch):
+def test_collect_forbidden_sync_calls_subprocess(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_forbidden_sync_calls finds subprocess.run."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -531,12 +495,12 @@ def test_collect_forbidden_sync_calls_subprocess(tmp_path, monkeypatch):
     assert any("subprocess.run" in reason for _, _, reason in results)
 
 
-def test_collect_forbidden_sync_calls_requests(tmp_path, monkeypatch):
+def test_collect_forbidden_sync_calls_requests(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_forbidden_sync_calls finds requests.get."""
-    src_root = tmp_path / "src"
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
+    src_root = policy_root / "src"
     src_root.mkdir()
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
 
     write_module(
         src_root / "module.py",
@@ -551,12 +515,11 @@ def test_collect_forbidden_sync_calls_requests(tmp_path, monkeypatch):
     assert any("requests.get" in reason for _, _, reason in results)
 
 
-def test_collect_duplicate_functions(tmp_path, monkeypatch):
+def test_collect_duplicate_functions(policy_root):
     """Test collect_duplicate_functions finds duplicate implementations."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
-        tmp_path / "module1.py",
+        policy_root / "module1.py",
         """
         def helper(x):
             result = x + 1
@@ -565,7 +528,7 @@ def test_collect_duplicate_functions(tmp_path, monkeypatch):
     )
 
     write_module(
-        tmp_path / "module2.py",
+        policy_root / "module2.py",
         """
         def helper(y):
             output = y + 1
@@ -577,12 +540,11 @@ def test_collect_duplicate_functions(tmp_path, monkeypatch):
     assert len(results) >= 1
 
 
-def test_collect_duplicate_functions_min_length(tmp_path, monkeypatch):
+def test_collect_duplicate_functions_min_length(policy_root):
     """Test collect_duplicate_functions respects min_length."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
-        tmp_path / "module1.py",
+        policy_root / "module1.py",
         """
         def tiny():
             return 1
@@ -590,7 +552,7 @@ def test_collect_duplicate_functions_min_length(tmp_path, monkeypatch):
     )
 
     write_module(
-        tmp_path / "module2.py",
+        policy_root / "module2.py",
         """
         def tiny():
             return 1
@@ -601,12 +563,11 @@ def test_collect_duplicate_functions_min_length(tmp_path, monkeypatch):
     assert len(results) == 0
 
 
-def test_collect_duplicate_functions_same_file(tmp_path, monkeypatch):
+def test_collect_duplicate_functions_same_file(policy_root):
     """Test collect_duplicate_functions ignores duplicates in same file."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
 
     write_module(
-        tmp_path / "module.py",
+        policy_root / "module.py",
         """
         def helper1(x):
             result = x + 1
@@ -627,13 +588,13 @@ def test_collect_duplicate_functions_same_file(tmp_path, monkeypatch):
     assert len(matching) == 0
 
 
-def test_collect_bytecode_artifacts(tmp_path, monkeypatch):
+def test_collect_bytecode_artifacts(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test collect_bytecode_artifacts finds .pyc files."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
 
-    (tmp_path / "module.pyc").write_bytes(b"fake bytecode")
-    pycache = tmp_path / "__pycache__"
+
+    (policy_root / "module.pyc").write_bytes(b"fake bytecode")
+    pycache = policy_root / "__pycache__"
     pycache.mkdir()
 
     results = collect_bytecode_artifacts()
@@ -642,14 +603,14 @@ def test_collect_bytecode_artifacts(tmp_path, monkeypatch):
     assert any("__pycache__" in path for path in results)
 
 
-def test_purge_bytecode_artifacts(tmp_path, monkeypatch):
+def test_purge_bytecode_artifacts(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test purge_bytecode_artifacts removes .pyc files."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
-    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", tmp_path)
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
 
-    pyc_file = tmp_path / "module.pyc"
+
+    pyc_file = policy_root / "module.pyc"
     pyc_file.write_bytes(b"fake bytecode")
-    pycache = tmp_path / "__pycache__"
+    pycache = policy_root / "__pycache__"
     pycache.mkdir()
     (pycache / "test.pyc").write_bytes(b"fake")
 
@@ -662,9 +623,10 @@ def test_purge_bytecode_artifacts(tmp_path, monkeypatch):
     assert not pycache.exists()
 
 
-def test_purge_bytecode_artifacts_handles_missing(tmp_path, monkeypatch):
+def test_purge_bytecode_artifacts_handles_missing(policy_root, monkeypatch: pytest.MonkeyPatch):
     """Test purge_bytecode_artifacts handles already deleted files."""
-    monkeypatch.setattr("ci_tools.scripts.policy_context.ROOT", tmp_path)
+    monkeypatch.setattr("ci_tools.scripts.policy_collectors_ast.ROOT", policy_root)
+
 
     # Run on empty directory
     purge_bytecode_artifacts()

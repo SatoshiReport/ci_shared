@@ -40,8 +40,9 @@ def test_main_returns_exit_code():
 
 def test_main_propagates_exceptions():
     """Test main propagates exceptions from policy_checks."""
-    with patch("ci_tools.scripts.policy_guard._run_policy_checks",
-               side_effect=RuntimeError("test error")):
+    with patch(
+        "ci_tools.scripts.policy_guard._run_policy_checks", side_effect=RuntimeError("test error")
+    ):
         with pytest.raises(RuntimeError) as exc:
             main()
         assert "test error" in str(exc.value)
@@ -49,6 +50,7 @@ def test_main_propagates_exceptions():
 
 def test_module_exports():
     """Test module exports expected symbols."""
+    # pylint: disable=import-outside-toplevel
     from ci_tools.scripts import policy_guard
 
     assert hasattr(policy_guard, "PolicyViolation")
@@ -58,6 +60,7 @@ def test_module_exports():
 
 def test_all_contains_expected_exports():
     """Test __all__ contains expected exports."""
+    # pylint: disable=import-outside-toplevel
     from ci_tools.scripts import policy_guard
 
     assert "PolicyViolation" in policy_guard.__all__
@@ -70,16 +73,20 @@ def test_main_as_script_success():
     with patch("ci_tools.scripts.policy_guard.main", return_value=0):
         with pytest.raises(SystemExit) as exc:
             # Simulate running as __main__
-            exec(compile(
-                "import sys; from ci_tools.scripts.policy_guard import main; sys.exit(main())",
-                "<string>",
-                "exec"
-            ))
+            # pylint: disable=exec-used
+            exec(
+                compile(
+                    "import sys; from ci_tools.scripts.policy_guard import main; sys.exit(main())",
+                    "<string>",
+                    "exec",
+                )
+            )
         assert exc.value.code == 0
 
 
-def test_main_as_script_with_violation(capsys):
+def test_main_as_script_with_violation():
     """Test running module as script with policy violation."""
+
     def mock_main():
         raise PolicyViolation("test violation")
 
@@ -90,13 +97,15 @@ def test_main_as_script_with_violation(capsys):
                 mock_main()
             except PolicyViolation as err:
                 print(err, file=sys.stderr)
-                raise SystemExit(1)
+                raise SystemExit(1) from err
 
         assert exc.value.code == 1
 
 
 def test_main_is_thin_wrapper():
     """Test main is marked as thin wrapper (no cover pragma)."""
+    # pylint: disable=import-outside-toplevel
+    # pylint: disable=import-outside-toplevel
     import inspect
     from ci_tools.scripts import policy_guard
 

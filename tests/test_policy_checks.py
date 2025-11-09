@@ -17,24 +17,27 @@ def test_policy_violation_imported():
     assert isinstance(exc, Exception)
 
 
+# pylint: disable=too-many-locals
 def test_main_calls_all_checks():
     """Test main calls all policy check functions."""
-    with patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts") as mock_purge, \
-         patch("ci_tools.scripts.policy_checks._check_keyword_policy") as mock_keyword, \
-         patch("ci_tools.scripts.policy_checks._check_flagged_tokens") as mock_flagged, \
-         patch("ci_tools.scripts.policy_checks._check_function_lengths") as mock_lengths, \
-         patch("ci_tools.scripts.policy_checks._check_broad_excepts") as mock_broad, \
-         patch("ci_tools.scripts.policy_checks._check_silent_handlers") as mock_silent, \
-         patch("ci_tools.scripts.policy_checks._check_generic_raises") as mock_generic, \
-         patch("ci_tools.scripts.policy_checks._check_literal_fallbacks") as mock_literal, \
-         patch("ci_tools.scripts.policy_checks._check_boolean_fallbacks") as mock_boolean, \
-         patch("ci_tools.scripts.policy_checks._check_conditional_literals") as mock_conditional, \
-         patch("ci_tools.scripts.policy_checks._check_backward_compat") as mock_backward, \
-         patch("ci_tools.scripts.policy_checks._check_legacy_artifacts") as mock_legacy, \
-         patch("ci_tools.scripts.policy_checks._check_sync_calls") as mock_sync, \
-         patch("ci_tools.scripts.policy_checks._check_suppressions") as mock_suppressions, \
-         patch("ci_tools.scripts.policy_checks._check_duplicate_functions") as mock_duplicates, \
-         patch("ci_tools.scripts.policy_checks._check_bytecode_artifacts") as mock_bytecode:
+    with (
+        patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts") as mock_purge,
+        patch("ci_tools.scripts.policy_checks._check_keyword_policy") as mock_keyword,
+        patch("ci_tools.scripts.policy_checks._check_flagged_tokens") as mock_flagged,
+        patch("ci_tools.scripts.policy_checks._check_function_lengths") as mock_lengths,
+        patch("ci_tools.scripts.policy_checks._check_broad_excepts") as mock_broad,
+        patch("ci_tools.scripts.policy_checks._check_silent_handlers") as mock_silent,
+        patch("ci_tools.scripts.policy_checks._check_generic_raises") as mock_generic,
+        patch("ci_tools.scripts.policy_checks._check_literal_fallbacks") as mock_literal,
+        patch("ci_tools.scripts.policy_checks._check_boolean_fallbacks") as mock_boolean,
+        patch("ci_tools.scripts.policy_checks._check_conditional_literals") as mock_conditional,
+        patch("ci_tools.scripts.policy_checks._check_backward_compat") as mock_backward,
+        patch("ci_tools.scripts.policy_checks._check_legacy_artifacts") as mock_legacy,
+        patch("ci_tools.scripts.policy_checks._check_sync_calls") as mock_sync,
+        patch("ci_tools.scripts.policy_checks._check_suppressions") as mock_suppressions,
+        patch("ci_tools.scripts.policy_checks._check_duplicate_functions") as mock_duplicates,
+        patch("ci_tools.scripts.policy_checks._check_bytecode_artifacts") as mock_bytecode,
+    ):
 
         result = main()
 
@@ -59,22 +62,24 @@ def test_main_calls_all_checks():
 
 def test_main_returns_zero_on_success():
     """Test main returns 0 when all checks pass."""
-    with patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts"), \
-         patch("ci_tools.scripts.policy_checks._check_keyword_policy"), \
-         patch("ci_tools.scripts.policy_checks._check_flagged_tokens"), \
-         patch("ci_tools.scripts.policy_checks._check_function_lengths"), \
-         patch("ci_tools.scripts.policy_checks._check_broad_excepts"), \
-         patch("ci_tools.scripts.policy_checks._check_silent_handlers"), \
-         patch("ci_tools.scripts.policy_checks._check_generic_raises"), \
-         patch("ci_tools.scripts.policy_checks._check_literal_fallbacks"), \
-         patch("ci_tools.scripts.policy_checks._check_boolean_fallbacks"), \
-         patch("ci_tools.scripts.policy_checks._check_conditional_literals"), \
-         patch("ci_tools.scripts.policy_checks._check_backward_compat"), \
-         patch("ci_tools.scripts.policy_checks._check_legacy_artifacts"), \
-         patch("ci_tools.scripts.policy_checks._check_sync_calls"), \
-         patch("ci_tools.scripts.policy_checks._check_suppressions"), \
-         patch("ci_tools.scripts.policy_checks._check_duplicate_functions"), \
-         patch("ci_tools.scripts.policy_checks._check_bytecode_artifacts"):
+    with (
+        patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts"),
+        patch("ci_tools.scripts.policy_checks._check_keyword_policy"),
+        patch("ci_tools.scripts.policy_checks._check_flagged_tokens"),
+        patch("ci_tools.scripts.policy_checks._check_function_lengths"),
+        patch("ci_tools.scripts.policy_checks._check_broad_excepts"),
+        patch("ci_tools.scripts.policy_checks._check_silent_handlers"),
+        patch("ci_tools.scripts.policy_checks._check_generic_raises"),
+        patch("ci_tools.scripts.policy_checks._check_literal_fallbacks"),
+        patch("ci_tools.scripts.policy_checks._check_boolean_fallbacks"),
+        patch("ci_tools.scripts.policy_checks._check_conditional_literals"),
+        patch("ci_tools.scripts.policy_checks._check_backward_compat"),
+        patch("ci_tools.scripts.policy_checks._check_legacy_artifacts"),
+        patch("ci_tools.scripts.policy_checks._check_sync_calls"),
+        patch("ci_tools.scripts.policy_checks._check_suppressions"),
+        patch("ci_tools.scripts.policy_checks._check_duplicate_functions"),
+        patch("ci_tools.scripts.policy_checks._check_bytecode_artifacts"),
+    ):
 
         result = main()
         assert result == 0
@@ -82,8 +87,13 @@ def test_main_returns_zero_on_success():
 
 def test_main_propagates_policy_violation():
     """Test main propagates PolicyViolation exceptions."""
-    with patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts"), \
-         patch("ci_tools.scripts.policy_checks._check_keyword_policy", side_effect=PolicyViolation("test error")):
+    with (
+        patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts"),
+        patch(
+            "ci_tools.scripts.policy_checks._check_keyword_policy",
+            side_effect=PolicyViolation("test error"),
+        ),
+    ):
 
         with pytest.raises(PolicyViolation) as exc:
             main()
@@ -97,24 +107,32 @@ def test_main_checks_called_in_order():
     def make_tracker(name):
         def tracker():
             call_order.append(name)
+
         return tracker
 
-    with patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts", make_tracker("purge")), \
-         patch("ci_tools.scripts.policy_checks._check_keyword_policy", make_tracker("keyword")), \
-         patch("ci_tools.scripts.policy_checks._check_flagged_tokens", make_tracker("flagged")), \
-         patch("ci_tools.scripts.policy_checks._check_function_lengths", make_tracker("lengths")), \
-         patch("ci_tools.scripts.policy_checks._check_broad_excepts", make_tracker("broad")), \
-         patch("ci_tools.scripts.policy_checks._check_silent_handlers", make_tracker("silent")), \
-         patch("ci_tools.scripts.policy_checks._check_generic_raises", make_tracker("generic")), \
-         patch("ci_tools.scripts.policy_checks._check_literal_fallbacks", make_tracker("literal")), \
-         patch("ci_tools.scripts.policy_checks._check_boolean_fallbacks", make_tracker("boolean")), \
-         patch("ci_tools.scripts.policy_checks._check_conditional_literals", make_tracker("conditional")), \
-         patch("ci_tools.scripts.policy_checks._check_backward_compat", make_tracker("backward")), \
-         patch("ci_tools.scripts.policy_checks._check_legacy_artifacts", make_tracker("legacy")), \
-         patch("ci_tools.scripts.policy_checks._check_sync_calls", make_tracker("sync")), \
-         patch("ci_tools.scripts.policy_checks._check_suppressions", make_tracker("suppressions")), \
-         patch("ci_tools.scripts.policy_checks._check_duplicate_functions", make_tracker("duplicates")), \
-         patch("ci_tools.scripts.policy_checks._check_bytecode_artifacts", make_tracker("bytecode")):
+    with (
+        patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts", make_tracker("purge")),
+        patch("ci_tools.scripts.policy_checks._check_keyword_policy", make_tracker("keyword")),
+        patch("ci_tools.scripts.policy_checks._check_flagged_tokens", make_tracker("flagged")),
+        patch("ci_tools.scripts.policy_checks._check_function_lengths", make_tracker("lengths")),
+        patch("ci_tools.scripts.policy_checks._check_broad_excepts", make_tracker("broad")),
+        patch("ci_tools.scripts.policy_checks._check_silent_handlers", make_tracker("silent")),
+        patch("ci_tools.scripts.policy_checks._check_generic_raises", make_tracker("generic")),
+        patch("ci_tools.scripts.policy_checks._check_literal_fallbacks", make_tracker("literal")),
+        patch("ci_tools.scripts.policy_checks._check_boolean_fallbacks", make_tracker("boolean")),
+        patch(
+            "ci_tools.scripts.policy_checks._check_conditional_literals",
+            make_tracker("conditional"),
+        ),
+        patch("ci_tools.scripts.policy_checks._check_backward_compat", make_tracker("backward")),
+        patch("ci_tools.scripts.policy_checks._check_legacy_artifacts", make_tracker("legacy")),
+        patch("ci_tools.scripts.policy_checks._check_sync_calls", make_tracker("sync")),
+        patch("ci_tools.scripts.policy_checks._check_suppressions", make_tracker("suppressions")),
+        patch(
+            "ci_tools.scripts.policy_checks._check_duplicate_functions", make_tracker("duplicates")
+        ),
+        patch("ci_tools.scripts.policy_checks._check_bytecode_artifacts", make_tracker("bytecode")),
+    ):
 
         main()
 
@@ -133,13 +151,18 @@ def test_main_stops_on_first_violation():
     def make_tracker(name):
         def tracker():
             call_order.append(name)
+
         return tracker
 
-    with patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts", make_tracker("purge")), \
-         patch("ci_tools.scripts.policy_checks._check_keyword_policy", make_tracker("keyword")), \
-         patch("ci_tools.scripts.policy_checks._check_flagged_tokens",
-               side_effect=PolicyViolation("error")), \
-         patch("ci_tools.scripts.policy_checks._check_function_lengths", make_tracker("lengths")):
+    with (
+        patch("ci_tools.scripts.policy_checks.purge_bytecode_artifacts", make_tracker("purge")),
+        patch("ci_tools.scripts.policy_checks._check_keyword_policy", make_tracker("keyword")),
+        patch(
+            "ci_tools.scripts.policy_checks._check_flagged_tokens",
+            side_effect=PolicyViolation("error"),
+        ),
+        patch("ci_tools.scripts.policy_checks._check_function_lengths", make_tracker("lengths")),
+    ):
 
         with pytest.raises(PolicyViolation):
             main()
@@ -151,6 +174,7 @@ def test_main_stops_on_first_violation():
 
 
 def test_module_exports():
+    # pylint: disable=import-outside-toplevel
     """Test module exports expected symbols."""
     from ci_tools.scripts import policy_checks
 
@@ -159,21 +183,25 @@ def test_module_exports():
     assert hasattr(policy_checks, "purge_bytecode_artifacts")
 
 
-def test_main_as_script_success(monkeypatch):
+def test_main_as_script_success():
     """Test running module as script with successful checks."""
     with patch("ci_tools.scripts.policy_checks.main", return_value=0):
         with pytest.raises(SystemExit) as exc:
             # Simulate running as __main__
-            exec(compile(
-                "import sys; from ci_tools.scripts.policy_checks import main; sys.exit(main())",
-                "<string>",
-                "exec"
-            ))
+            # pylint: disable=exec-used
+            exec(
+                compile(
+                    "import sys; from ci_tools.scripts.policy_checks import main; sys.exit(main())",
+                    "<string>",
+                    "exec",
+                )
+            )
         assert exc.value.code == 0
 
 
-def test_main_as_script_with_violation(monkeypatch, capsys):
+def test_main_as_script_with_violation():
     """Test running module as script with policy violation."""
+
     def mock_main():
         raise PolicyViolation("test violation")
 
@@ -184,6 +212,6 @@ def test_main_as_script_with_violation(monkeypatch, capsys):
                 mock_main()
             except PolicyViolation as err:
                 print(err, file=sys.stderr)
-                raise SystemExit(1)
+                raise SystemExit(1) from err
 
         assert exc.value.code == 1

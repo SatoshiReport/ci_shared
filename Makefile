@@ -19,8 +19,8 @@ METHOD_COUNT_GUARD_ARGS = --root $(SHARED_SOURCE_ROOT) --max-public-methods 15 -
 
 include ci_shared.mk
 
-PYLINT_ARGS = --fail-under=9.0
-SHARED_PYLINT_TARGETS = ci_tools tests/test_*.py tests/conftest.py
+PYLINT_ARGS =
+SHARED_PYLINT_TARGETS = ci_tools tests/*.py
 
 # Convenience passthrough targets (optional for local workflows).
 format:

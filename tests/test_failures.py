@@ -92,7 +92,7 @@ class TestRenderCoverageContext:
             ],
             threshold=80.0,
         )
-        summary, log_excerpt, implicated = _render_coverage_context(report)
+        summary, _log_excerpt, implicated = _render_coverage_context(report)
         assert "- module1.py: 65.5%" in summary
         assert "- module2.py: 72.3%" in summary
         assert len(implicated) == 2
@@ -104,7 +104,7 @@ class TestRenderCoverageContext:
             deficits=[CoverageDeficit(path="file.py", coverage=45.0)],
             threshold=80.0,
         )
-        summary, log_excerpt, implicated = _render_coverage_context(report)
+        _summary, log_excerpt, _implicated = _render_coverage_context(report)
         assert "Name     Stmts   Cover" in log_excerpt
         assert "file.py    100    45%" in log_excerpt
 
@@ -118,7 +118,7 @@ class TestRenderCoverageContext:
             ],
             threshold=80.0,
         )
-        summary, log_excerpt, implicated = _render_coverage_context(report)
+        _summary, _log_excerpt, implicated = _render_coverage_context(report)
         assert implicated == ["a.py", "b.py"]
 
     def test_formats_threshold_without_decimal_places(self):
@@ -128,7 +128,7 @@ class TestRenderCoverageContext:
             deficits=[CoverageDeficit(path="file.py", coverage=70.0)],
             threshold=85.5,
         )
-        summary, log_excerpt, implicated = _render_coverage_context(report)
+        summary, _log_excerpt, _implicated = _render_coverage_context(report)
         assert "86%" in summary  # 85.5 rounds to 86
 
 
@@ -144,9 +144,7 @@ class TestBuildFailureContext:
             deficits=[CoverageDeficit(path="module.py", coverage=60.0)],
             threshold=80.0,
         )
-        with patch(
-            "ci_tools.ci_runtime.failures._gather_focused_diff"
-        ) as mock_focused:
+        with patch("ci_tools.ci_runtime.failures._gather_focused_diff") as mock_focused:
             mock_focused.return_value = "focused diff"
             context = build_failure_context(args, result, report)
             assert isinstance(context, FailureContext)
@@ -159,19 +157,13 @@ class TestBuildFailureContext:
     def test_handles_regular_ci_failure(self, capsys):
         """Test handles regular CI failure without coverage report."""
         args = SimpleNamespace(log_tail=50)
-        result = CommandResult(
-            returncode=1, stdout="test output\nerror occurred", stderr=""
-        )
+        result = CommandResult(returncode=1, stdout="test output\nerror occurred", stderr="")
         with patch("ci_tools.ci_runtime.failures.summarize_failure") as mock_summarize:
-            with patch(
-                "ci_tools.ci_runtime.failures._gather_focused_diff"
-            ) as mock_focused:
+            with patch("ci_tools.ci_runtime.failures._gather_focused_diff") as mock_focused:
                 with patch(
                     "ci_tools.ci_runtime.failures.detect_missing_symbol_error"
                 ) as mock_missing:
-                    with patch(
-                        "ci_tools.ci_runtime.failures.detect_attribute_error"
-                    ) as mock_attr:
+                    with patch("ci_tools.ci_runtime.failures.detect_attribute_error") as mock_attr:
                         mock_summarize.return_value = ("summary", ["file.py"])
                         mock_missing.return_value = None
                         mock_attr.return_value = None
@@ -187,9 +179,7 @@ class TestBuildFailureContext:
         args = SimpleNamespace(log_tail=50)
         result = CommandResult(returncode=1, stdout="ImportError detected", stderr="")
         with patch("ci_tools.ci_runtime.failures.summarize_failure") as mock_summarize:
-            with patch(
-                "ci_tools.ci_runtime.failures.detect_missing_symbol_error"
-            ) as mock_missing:
+            with patch("ci_tools.ci_runtime.failures.detect_missing_symbol_error") as mock_missing:
                 mock_summarize.return_value = ("", [])
                 mock_missing.return_value = "Missing symbol hint"
                 with pytest.raises(CiAbort) as exc_info:
@@ -203,12 +193,8 @@ class TestBuildFailureContext:
         args = SimpleNamespace(log_tail=50)
         result = CommandResult(returncode=1, stdout="AttributeError occurred", stderr="")
         with patch("ci_tools.ci_runtime.failures.summarize_failure") as mock_summarize:
-            with patch(
-                "ci_tools.ci_runtime.failures.detect_missing_symbol_error"
-            ) as mock_missing:
-                with patch(
-                    "ci_tools.ci_runtime.failures.detect_attribute_error"
-                ) as mock_attr:
+            with patch("ci_tools.ci_runtime.failures.detect_missing_symbol_error") as mock_missing:
+                with patch("ci_tools.ci_runtime.failures.detect_attribute_error") as mock_attr:
                     mock_summarize.return_value = ("", [])
                     mock_missing.return_value = None
                     mock_attr.return_value = "Attribute error hint"
@@ -223,12 +209,8 @@ class TestBuildFailureContext:
         long_output = "\n".join([f"line{i}" for i in range(20)])
         result = CommandResult(returncode=1, stdout=long_output, stderr="")
         with patch("ci_tools.ci_runtime.failures.tail_text") as mock_tail:
-            with patch(
-                "ci_tools.ci_runtime.failures.summarize_failure"
-            ) as mock_summarize:
-                with patch(
-                    "ci_tools.ci_runtime.failures._gather_focused_diff"
-                ) as mock_focused:
+            with patch("ci_tools.ci_runtime.failures.summarize_failure") as mock_summarize:
+                with patch("ci_tools.ci_runtime.failures._gather_focused_diff") as mock_focused:
                     with patch(
                         "ci_tools.ci_runtime.failures.detect_missing_symbol_error"
                     ) as mock_missing:
@@ -249,15 +231,11 @@ class TestBuildFailureContext:
         args = SimpleNamespace(log_tail=50)
         result = CommandResult(returncode=1, stdout="", stderr="")
         with patch("ci_tools.ci_runtime.failures.summarize_failure") as mock_summarize:
-            with patch(
-                "ci_tools.ci_runtime.failures._gather_focused_diff"
-            ) as mock_focused:
+            with patch("ci_tools.ci_runtime.failures._gather_focused_diff") as mock_focused:
                 with patch(
                     "ci_tools.ci_runtime.failures.detect_missing_symbol_error"
                 ) as mock_missing:
-                    with patch(
-                        "ci_tools.ci_runtime.failures.detect_attribute_error"
-                    ) as mock_attr:
+                    with patch("ci_tools.ci_runtime.failures.detect_attribute_error") as mock_attr:
                         mock_summarize.return_value = ("summary", ["a.py", "b.py"])
                         mock_focused.return_value = "focused diff content"
                         mock_missing.return_value = None
@@ -300,21 +278,17 @@ class TestBuildFailureContext:
         args = SimpleNamespace(log_tail=50)
         result = CommandResult(returncode=1, stdout="generic error", stderr="")
         with patch("ci_tools.ci_runtime.failures.summarize_failure") as mock_summarize:
-            with patch(
-                "ci_tools.ci_runtime.failures._gather_focused_diff"
-            ) as mock_focused:
+            with patch("ci_tools.ci_runtime.failures._gather_focused_diff") as mock_focused:
                 with patch(
                     "ci_tools.ci_runtime.failures.detect_missing_symbol_error"
                 ) as mock_missing:
-                    with patch(
-                        "ci_tools.ci_runtime.failures.detect_attribute_error"
-                    ) as mock_attr:
+                    with patch("ci_tools.ci_runtime.failures.detect_attribute_error") as mock_attr:
                         mock_summarize.return_value = ("generic failure", [])
                         mock_focused.return_value = ""
                         mock_missing.return_value = None
                         mock_attr.return_value = None
                         context = build_failure_context(args, result, None)
-                        assert context.implicated_files == []
+                        assert not context.implicated_files
                         assert context.focused_diff == ""
 
 

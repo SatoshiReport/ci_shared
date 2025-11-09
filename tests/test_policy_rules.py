@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import textwrap
 from pathlib import Path
 from unittest.mock import patch
 
@@ -31,8 +30,6 @@ from ci_tools.scripts.policy_rules import (
     enforce_occurrences,
     purge_bytecode_artifacts,
 )
-
-from conftest import write_module
 
 
 def test_policy_violation_exception():
@@ -239,7 +236,9 @@ def test_check_literal_fallbacks_no_violations():
 def test_check_literal_fallbacks_with_violations():
     """Test _check_literal_fallbacks with violations."""
     mock_fallbacks = [("file.py", 10, "dict.get literal fallback")]
-    with patch("ci_tools.scripts.policy_rules.collect_literal_fallbacks", return_value=mock_fallbacks):
+    with patch(
+        "ci_tools.scripts.policy_rules.collect_literal_fallbacks", return_value=mock_fallbacks
+    ):
         with pytest.raises(PolicyViolation) as exc:
             _check_literal_fallbacks()
         assert "Fallback default usage detected" in str(exc.value)
@@ -265,7 +264,9 @@ def test_check_boolean_fallbacks_with_violations():
 
 def test_check_conditional_literals_no_violations():
     """Test _check_conditional_literals with no violations."""
-    with patch("ci_tools.scripts.policy_rules.collect_conditional_literal_returns", return_value=[]):
+    with patch(
+        "ci_tools.scripts.policy_rules.collect_conditional_literal_returns", return_value=[]
+    ):
         _check_conditional_literals()
         # Should not raise
 
@@ -273,7 +274,10 @@ def test_check_conditional_literals_no_violations():
 def test_check_conditional_literals_with_violations():
     """Test _check_conditional_literals with violations."""
     mock_literals = [("file.py", 10), ("file.py", 20)]
-    with patch("ci_tools.scripts.policy_rules.collect_conditional_literal_returns", return_value=mock_literals):
+    with patch(
+        "ci_tools.scripts.policy_rules.collect_conditional_literal_returns",
+        return_value=mock_literals,
+    ):
         with pytest.raises(PolicyViolation) as exc:
             _check_conditional_literals()
         assert "Policy violations detected" in str(exc.value)
@@ -290,7 +294,9 @@ def test_check_backward_compat_no_violations():
 def test_check_backward_compat_with_violations():
     """Test _check_backward_compat with violations."""
     mock_compat = [("file.py", 10, "conditional legacy guard")]
-    with patch("ci_tools.scripts.policy_rules.collect_backward_compat_blocks", return_value=mock_compat):
+    with patch(
+        "ci_tools.scripts.policy_rules.collect_backward_compat_blocks", return_value=mock_compat
+    ):
         with pytest.raises(PolicyViolation) as exc:
             _check_backward_compat()
         assert "Backward compatibility code detected" in str(exc.value)
@@ -320,7 +326,9 @@ def test_check_legacy_artifacts_configs():
     """Test _check_legacy_artifacts with legacy configs."""
     mock_configs = [("config.json", 5, "legacy toggle in config")]
     with patch("ci_tools.scripts.policy_rules.collect_legacy_modules", return_value=[]):
-        with patch("ci_tools.scripts.policy_rules.collect_legacy_configs", return_value=mock_configs):
+        with patch(
+            "ci_tools.scripts.policy_rules.collect_legacy_configs", return_value=mock_configs
+        ):
             with pytest.raises(PolicyViolation) as exc:
                 _check_legacy_artifacts()
             assert "Legacy toggle detected in config" in str(exc.value)
@@ -336,7 +344,9 @@ def test_check_sync_calls_no_violations():
 def test_check_sync_calls_with_violations():
     """Test _check_sync_calls with violations."""
     mock_calls = [("file.py", 10, "forbidden synchronous call 'time.sleep'")]
-    with patch("ci_tools.scripts.policy_rules.collect_forbidden_sync_calls", return_value=mock_calls):
+    with patch(
+        "ci_tools.scripts.policy_rules.collect_forbidden_sync_calls", return_value=mock_calls
+    ):
         with pytest.raises(PolicyViolation) as exc:
             _check_sync_calls()
         assert "Synchronous call policy violations detected" in str(exc.value)
@@ -353,7 +363,9 @@ def test_check_suppressions_no_violations():
 def test_check_suppressions_with_violations():
     """Test _check_suppressions with violations."""
     mock_suppressions = [("file.py", 10, "# noqa")]
-    with patch("ci_tools.scripts.policy_rules.collect_suppressions", return_value=mock_suppressions):
+    with patch(
+        "ci_tools.scripts.policy_rules.collect_suppressions", return_value=mock_suppressions
+    ):
         with pytest.raises(PolicyViolation) as exc:
             _check_suppressions()
         assert "Suppression policy violations detected" in str(exc.value)
@@ -375,7 +387,9 @@ def test_check_duplicate_functions_with_violations():
             FunctionEntry(Path("file2.py"), "helper", 20, 5),
         ]
     ]
-    with patch("ci_tools.scripts.policy_rules.collect_duplicate_functions", return_value=mock_duplicates):
+    with patch(
+        "ci_tools.scripts.policy_rules.collect_duplicate_functions", return_value=mock_duplicates
+    ):
         with pytest.raises(PolicyViolation) as exc:
             _check_duplicate_functions()
         assert "Duplicate helper policy violations detected" in str(exc.value)
@@ -391,7 +405,9 @@ def test_check_bytecode_artifacts_no_violations():
 def test_check_bytecode_artifacts_with_violations():
     """Test _check_bytecode_artifacts with violations."""
     mock_artifacts = ["module.pyc", "__pycache__"]
-    with patch("ci_tools.scripts.policy_rules.collect_bytecode_artifacts", return_value=mock_artifacts):
+    with patch(
+        "ci_tools.scripts.policy_rules.collect_bytecode_artifacts", return_value=mock_artifacts
+    ):
         with pytest.raises(PolicyViolation) as exc:
             _check_bytecode_artifacts()
         assert "Bytecode artifacts detected" in str(exc.value)

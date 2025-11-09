@@ -1,3 +1,5 @@
+"""Unit tests for unused_module_guard module."""
+
 from __future__ import annotations
 
 import textwrap
@@ -6,9 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
-from ci_tools.scripts import unused_module_guard
-
 from conftest import write_module
+from ci_tools.scripts import unused_module_guard
+from ci_tools.scripts.unused_module_guard import SUSPICIOUS_PATTERNS
 
 
 def test_import_collector_simple_import():
@@ -200,22 +202,22 @@ def test_get_module_name_root_init(tmp_path: Path):
 
 def test_duplicate_reason_suspicious():
     """Test detecting suspicious duplicate patterns."""
-    assert unused_module_guard._duplicate_reason("module_old") is not None
-    assert unused_module_guard._duplicate_reason("module_backup") is not None
-    assert unused_module_guard._duplicate_reason("module_refactored") is not None
-    assert unused_module_guard._duplicate_reason("module_temp") is not None
+    assert unused_module_guard.duplicate_reason("module_old") is not None
+    assert unused_module_guard.duplicate_reason("module_backup") is not None
+    assert unused_module_guard.duplicate_reason("module_refactored") is not None
+    assert unused_module_guard.duplicate_reason("module_temp") is not None
 
 
 def test_duplicate_reason_not_suspicious():
     """Test that normal names are not flagged."""
-    assert unused_module_guard._duplicate_reason("module") is None
-    assert unused_module_guard._duplicate_reason("normal_name") is None
+    assert unused_module_guard.duplicate_reason("module") is None
+    assert unused_module_guard.duplicate_reason("normal_name") is None
 
 
 def test_duplicate_reason_false_positive():
     """Test that false positives are not flagged."""
-    assert unused_module_guard._duplicate_reason("max_temp") is None
-    assert unused_module_guard._duplicate_reason("phase_2") is None
+    assert unused_module_guard.duplicate_reason("max_temp") is None
+    assert unused_module_guard.duplicate_reason("phase_2") is None
 
 
 def test_find_suspicious_duplicates(tmp_path: Path):
@@ -252,60 +254,60 @@ def test_find_suspicious_duplicates_skips_pycache(tmp_path: Path):
 def test_should_skip_file_pycache():
     """Test that __pycache__ files are skipped."""
     py_file = Path("/project/src/__pycache__/module.py")
-    assert unused_module_guard._should_skip_file(py_file, []) is True
+    assert unused_module_guard.should_skip_file(py_file, []) is True
 
 
 def test_should_skip_file_main():
     """Test that __main__.py is skipped."""
     py_file = Path("/project/src/__main__.py")
-    assert unused_module_guard._should_skip_file(py_file, []) is True
+    assert unused_module_guard.should_skip_file(py_file, []) is True
 
 
 def test_should_skip_file_exclude_pattern():
     """Test that exclude patterns work."""
     py_file = Path("/project/src/test_module.py")
-    assert unused_module_guard._should_skip_file(py_file, ["test_"]) is True
+    assert unused_module_guard.should_skip_file(py_file, ["test_"]) is True
 
 
 def test_should_skip_file_normal():
     """Test that normal files are not skipped."""
     py_file = Path("/project/src/module.py")
-    assert unused_module_guard._should_skip_file(py_file, []) is False
+    assert unused_module_guard.should_skip_file(py_file, []) is False
 
 
 def test_module_is_imported_exact_match():
     """Test module_is_imported with exact match."""
     all_imports = {"foo", "bar.baz"}
     root = Path("src")
-    assert unused_module_guard._module_is_imported("foo", "foo", all_imports, root) is True
+    assert unused_module_guard.module_is_imported("foo", "foo", all_imports, root) is True
 
 
 def test_module_is_imported_stem_match():
     """Test module_is_imported with stem match."""
     all_imports = {"foo", "bar"}
     root = Path("src")
-    assert unused_module_guard._module_is_imported("bar.baz", "baz", all_imports, root) is True
+    assert unused_module_guard.module_is_imported("bar.baz", "baz", all_imports, root) is True
 
 
 def test_module_is_imported_partial_match():
     """Test module_is_imported with partial match."""
     all_imports = {"foo.bar"}
     root = Path("src")
-    assert unused_module_guard._module_is_imported("foo.bar.baz", "baz", all_imports, root) is True
+    assert unused_module_guard.module_is_imported("foo.bar.baz", "baz", all_imports, root) is True
 
 
 def test_module_is_imported_no_match():
     """Test module_is_imported with no match."""
     all_imports = {"foo", "bar"}
     root = Path("src")
-    assert unused_module_guard._module_is_imported("qux.quux", "quux", all_imports, root) is False
+    assert unused_module_guard.module_is_imported("qux.quux", "quux", all_imports, root) is False
 
 
 def test_module_is_imported_empty_name():
     """Test module_is_imported with empty name."""
     all_imports = {"foo"}
     root = Path("src")
-    assert unused_module_guard._module_is_imported("", "file", all_imports, root) is True
+    assert unused_module_guard.module_is_imported("", "file", all_imports, root) is True
 
 
 def test_find_unused_modules(tmp_path: Path):
@@ -456,7 +458,7 @@ def test_main_root_does_not_exist(tmp_path: Path, capsys: pytest.CaptureFixture)
     assert "does not exist" in captured.err
 
 
-def test_main_custom_exclude_patterns(tmp_path: Path, capsys: pytest.CaptureFixture):
+def test_main_custom_exclude_patterns(tmp_path: Path):
     """Test main function with custom exclude patterns."""
     root = tmp_path / "src"
     root.mkdir()
@@ -512,22 +514,9 @@ def test_import_collector_aliased_import():
 
 def test_suspicious_patterns_coverage():
     """Test coverage of all suspicious patterns."""
-    patterns = [
-        "_refactored",
-        "_slim",
-        "_optimized",
-        "_old",
-        "_backup",
-        "_copy",
-        "_new",
-        "_temp",
-        "_v2",
-        "_2",
-    ]
-
-    for pattern in patterns:
+    for pattern in SUSPICIOUS_PATTERNS:
         filename = f"module{pattern}"
-        reason = unused_module_guard._duplicate_reason(filename)
+        reason = unused_module_guard.duplicate_reason(filename)
         assert reason is not None, f"Pattern {pattern} should be detected"
 
 
@@ -574,7 +563,7 @@ def test_collect_all_imports_with_parent(tmp_path: Path):
     write_module(root / "child.py", "import foo")
     write_module(parent / "parent.py", "import bar")
 
-    imports = unused_module_guard._collect_all_imports_with_parent(root)
+    imports = unused_module_guard.collect_all_imports_with_parent(root)
 
     assert "foo" in imports
     assert "bar" in imports
@@ -586,5 +575,7 @@ def test_module_is_imported_with_partial_paths():
     root = Path("src")
 
     # Should match any partial path
-    assert unused_module_guard._module_is_imported("foo.bar.baz.qux", "qux", all_imports, root) is True
-    assert unused_module_guard._module_is_imported("foo.bar", "bar", all_imports, root) is True
+    assert (
+        unused_module_guard.module_is_imported("foo.bar.baz.qux", "qux", all_imports, root) is True
+    )
+    assert unused_module_guard.module_is_imported("foo.bar", "bar", all_imports, root) is True

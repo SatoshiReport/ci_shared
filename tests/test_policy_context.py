@@ -136,10 +136,12 @@ def test_function_normalizer_visit_arg():
 
 def test_normalize_function_simple():
     """Test normalize_function with simple function."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         def foo(x, y):
             return x + y
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.FunctionDef)
@@ -150,11 +152,13 @@ def test_normalize_function_simple():
 
 def test_normalize_function_with_docstring():
     """Test normalize_function removes docstring."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         def foo(x):
             \"\"\"Docstring here.\"\"\"
             return x + 1
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.FunctionDef)
@@ -165,10 +169,12 @@ def test_normalize_function_with_docstring():
 
 def test_normalize_function_async():
     """Test normalize_function with async function."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         async def foo(x, y):
             return x + y
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.AsyncFunctionDef)
@@ -177,7 +183,7 @@ def test_normalize_function_async():
     assert "AsyncFunctionDef" in result
 
 
-def test_normalize_path(tmp_path, monkeypatch):
+def test_normalize_path(tmp_path):
     """Test relative_path converts to relative path."""
     test_file = tmp_path / "subdir" / "file.py"
     result = relative_path(test_file, tmp_path, as_string=True)
@@ -212,7 +218,7 @@ def test_iter_python_files_handles_nonexistent_path(tmp_path):
     """Test iter_python_files handles non-existent base path."""
     missing = tmp_path / "missing"
     files = list(iter_python_files([missing]))
-    assert files == []
+    assert not files
 
 
 def test_parse_ast_valid_syntax(tmp_path):
@@ -424,13 +430,15 @@ def test_is_logging_call_not_expr():
 
 def test_handler_has_raise_true():
     """Test handler_has_raise detects raise statement."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         try:
             risky()
         except Exception as e:
             process(e)
             raise
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.Try)
@@ -440,12 +448,14 @@ def test_handler_has_raise_true():
 
 def test_handler_has_raise_false():
     """Test handler_has_raise returns false without raise."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         try:
             risky()
         except Exception:
             pass
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.Try)
@@ -455,12 +465,14 @@ def test_handler_has_raise_false():
 
 def test_classify_handler_with_raise():
     """Test classify_handler returns None for handlers with raise."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         try:
             risky()
         except Exception:
             raise
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.Try)
@@ -470,12 +482,14 @@ def test_classify_handler_with_raise():
 
 def test_classify_handler_empty():
     """Test classify_handler detects empty handler."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         try:
             risky()
         except Exception:
             pass
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.Try)
@@ -487,13 +501,15 @@ def test_classify_handler_empty():
 
 def test_classify_handler_continue():
     """Test classify_handler detects continue."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         for i in range(10):
             try:
                 risky()
             except Exception:
                 continue
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.For)
@@ -507,13 +523,15 @@ def test_classify_handler_continue():
 
 def test_classify_handler_break():
     """Test classify_handler detects break."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         while True:
             try:
                 risky()
             except Exception:
                 break
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.While)
@@ -527,13 +545,15 @@ def test_classify_handler_break():
 
 def test_classify_handler_literal_return():
     """Test classify_handler detects literal return."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         def foo():
             try:
                 risky()
             except Exception:
                 return None
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.FunctionDef)
@@ -547,13 +567,15 @@ def test_classify_handler_literal_return():
 
 def test_classify_handler_logging():
     """Test classify_handler detects logging without re-raise."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         def foo():
             try:
                 risky()
             except Exception as e:
                 logging.error(str(e))
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.FunctionDef)
@@ -567,13 +589,15 @@ def test_classify_handler_logging():
 
 def test_classify_handler_no_reraise():
     """Test classify_handler detects handler without re-raise."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         def foo():
             try:
                 risky()
             except Exception:
                 handle_error()
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.FunctionDef)
@@ -623,12 +647,14 @@ def test_is_literal_none_guard_multiple_comparators():
 
 def test_handler_contains_suppression_true():
     """Test handler_contains_suppression finds suppression token."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         try:
             risky()
         except Exception:  # policy_guard: allow-broad-except
             pass
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.Try)
@@ -640,12 +666,14 @@ def test_handler_contains_suppression_true():
 
 def test_handler_contains_suppression_false():
     """Test handler_contains_suppression returns false without token."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         try:
             risky()
         except Exception:
             pass
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.Try)
@@ -657,12 +685,14 @@ def test_handler_contains_suppression_false():
 
 def test_handler_contains_suppression_empty_lines():
     """Test handler_contains_suppression with empty lines."""
-    source = textwrap.dedent("""
+    source = textwrap.dedent(
+        """
         try:
             risky()
         except Exception:
             pass
-    """)
+    """
+    )
     tree = ast.parse(source)
     stmt = tree.body[0]
     assert isinstance(stmt, ast.Try)

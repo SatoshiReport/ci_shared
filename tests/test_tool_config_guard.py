@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from ci_tools.scripts.tool_config_guard import (
     _compare_tool_section,
@@ -30,7 +29,7 @@ from ci_tools.scripts.tool_config_guard import (
 def test_load_toml(tmp_path):
     """Test load_toml loads TOML file."""
     toml_file = tmp_path / "test.toml"
-    toml_file.write_text('[tool.ruff]\nline-length = 100')
+    toml_file.write_text("[tool.ruff]\nline-length = 100")
     result = load_toml(toml_file)
     assert "tool" in result
     assert result["tool"]["ruff"]["line-length"] == 100
@@ -51,7 +50,7 @@ def test_extract_tool_config_no_tool():
     """Test extract_tool_config with no tool section."""
     data = {"project": {"name": "test"}}
     result = extract_tool_config(data)
-    assert result == {}
+    assert not result
 
 
 def test_compare_configs_match():
@@ -60,7 +59,7 @@ def test_compare_configs_match():
     repo = {"tool": {"ruff": {"line-length": 100}}}
     matches, differences = compare_configs(shared, repo)
     assert matches is True
-    assert differences == []
+    assert not differences
 
 
 def test_compare_configs_no_tool_in_shared():
@@ -69,7 +68,7 @@ def test_compare_configs_no_tool_in_shared():
     repo = {"tool": {"ruff": {"line-length": 100}}}
     matches, differences = compare_configs(shared, repo)
     assert matches is True
-    assert differences == []
+    assert not differences
 
 
 def test_compare_configs_no_tool_in_repo():
@@ -94,7 +93,7 @@ def test_compare_configs_extra_tool_in_repo():
     """Test compare_configs allows extra tools in repo."""
     shared = {"tool": {"ruff": {"line-length": 100}}}
     repo = {"tool": {"ruff": {"line-length": 100}, "mypy": {}}}
-    matches, differences = compare_configs(shared, repo)
+    matches, _differences = compare_configs(shared, repo)
     assert matches is True
 
 
@@ -112,7 +111,7 @@ def test_compare_tool_section_dict_match():
     shared = {"line-length": 100, "target-version": "py310"}
     repo = {"line-length": 100, "target-version": "py310"}
     differences = _compare_tool_section(shared, repo, "tool.ruff")
-    assert differences == []
+    assert not differences
 
 
 def test_compare_tool_section_missing_key():
@@ -129,7 +128,7 @@ def test_compare_tool_section_extra_key_in_repo():
     shared = {"line-length": 100}
     repo = {"line-length": 100, "extra-key": "value"}
     differences = _compare_tool_section(shared, repo, "tool.ruff")
-    assert differences == []
+    assert not differences
 
 
 def test_compare_tool_section_nested_dict():
@@ -137,7 +136,7 @@ def test_compare_tool_section_nested_dict():
     shared = {"lint": {"select": ["E", "F"]}}
     repo = {"lint": {"select": ["E", "F"]}}
     differences = _compare_tool_section(shared, repo, "tool.ruff")
-    assert differences == []
+    assert not differences
 
 
 def test_compare_tool_section_value_mismatch():
@@ -191,7 +190,7 @@ def test_format_toml_value_list():
 def test_format_toml_value_dict():
     """Test _format_toml_value with dict returns empty."""
     result = _format_toml_value("section", {}, "")
-    assert result == []
+    assert not result
 
 
 def test_format_toml_tool_section():
@@ -262,14 +261,14 @@ def test_print_tool_config_diff_no_tool(capsys):
     shared = {}
     repo = {}
     print_tool_config_diff(shared, repo)
-    captured = capsys.readouterr()
+    _captured = capsys.readouterr()
     # Should not crash
 
 
 def test_sync_configs(tmp_path):
     """Test sync_configs overwrites tool sections."""
     shared_config = tmp_path / "shared.toml"
-    shared_config.write_text('[tool.ruff]\nline-length = 100')
+    shared_config.write_text("[tool.ruff]\nline-length = 100")
     repo_pyproject = tmp_path / "pyproject.toml"
     repo_pyproject.write_text(
         '[project]\nname = "test"\n\n'
@@ -355,14 +354,12 @@ def test_validate_paths_success(tmp_path):
 def test_handle_config_mismatch_sync_mode(tmp_path, capsys):
     """Test _handle_config_mismatch in sync mode."""
     shared_config = tmp_path / "shared.toml"
-    shared_config.write_text('[tool.ruff]\nline-length = 100')
+    shared_config.write_text("[tool.ruff]\nline-length = 100")
     repo_pyproject = tmp_path / "pyproject.toml"
     repo_pyproject.write_text('[project]\nname = "test"')
 
     differences = ["Missing tool configuration: [tool.ruff]"]
-    result = _handle_config_mismatch(
-        repo_pyproject, differences, True, shared_config
-    )
+    result = _handle_config_mismatch(repo_pyproject, differences, True, shared_config)
     assert result == 0
     updated = repo_pyproject.read_text()
     assert "[tool.ruff]" in updated
@@ -378,18 +375,16 @@ def test_handle_config_mismatch_validation_mode(tmp_path):
     repo_pyproject.write_text('[project]\nname = "test"')
 
     differences = ["Missing tool configuration: [tool.ruff]"]
-    result = _handle_config_mismatch(
-        repo_pyproject, differences, False, shared_config
-    )
+    result = _handle_config_mismatch(repo_pyproject, differences, False, shared_config)
     assert result == 1
 
 
 def test_main_success(tmp_path):
     """Test main with matching configs."""
     shared_config = tmp_path / "shared-tool-config.toml"
-    shared_config.write_text('[tool.ruff]\nline-length = 100')
+    shared_config.write_text("[tool.ruff]\nline-length = 100")
     repo_pyproject = tmp_path / "pyproject.toml"
-    repo_pyproject.write_text('[tool.ruff]\nline-length = 100')
+    repo_pyproject.write_text("[tool.ruff]\nline-length = 100")
 
     with patch("ci_tools.scripts.tool_config_guard._find_shared_config") as mock:
         mock.return_value = shared_config
@@ -401,7 +396,7 @@ def test_main_success(tmp_path):
 def test_main_config_mismatch(tmp_path):
     """Test main with mismatched configs."""
     shared_config = tmp_path / "shared-tool-config.toml"
-    shared_config.write_text('[tool.ruff]\nline-length = 100')
+    shared_config.write_text("[tool.ruff]\nline-length = 100")
     repo_pyproject = tmp_path / "pyproject.toml"
     repo_pyproject.write_text('[project]\nname = "test"')
 
@@ -442,7 +437,7 @@ def test_main_toml_load_error(tmp_path):
 def test_main_sync_mode(tmp_path):
     """Test main in sync mode."""
     shared_config = tmp_path / "shared-tool-config.toml"
-    shared_config.write_text('[tool.ruff]\nline-length = 100')
+    shared_config.write_text("[tool.ruff]\nline-length = 100")
     repo_pyproject = tmp_path / "pyproject.toml"
     repo_pyproject.write_text('[project]\nname = "test"\n')
 

@@ -1,17 +1,17 @@
+"""Unit tests for data_guard module."""
+
 from __future__ import annotations
 
 import ast
 import json
-import textwrap
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from conftest import write_module
 from ci_tools.scripts import data_guard
 from ci_tools.scripts.guard_common import parse_python_ast, relative_path
-
-from conftest import write_module
 
 
 def write_allowlist(path: Path, content: dict) -> None:
@@ -26,7 +26,7 @@ class TestAllowlistLoading:
     def test_load_allowlist_missing_file(self, tmp_path: Path) -> None:
         """Test loading allowlist when file doesn't exist."""
         with patch.object(data_guard, "ALLOWLIST_PATH", tmp_path / "missing.json"):
-            result = data_guard._load_allowlist()
+            result = data_guard.load_allowlist()
             assert result == {"assignments": set(), "comparisons": set(), "dataframe": set()}
 
     def test_load_allowlist_valid_file(self, tmp_path: Path) -> None:
@@ -35,12 +35,12 @@ class TestAllowlistLoading:
         content = {
             "assignments": ["threshold_value", "max_retries"],
             "comparisons": ["timeout"],
-            "dataframe": ["pd.DataFrame"]
+            "dataframe": ["pd.DataFrame"],
         }
         write_allowlist(allowlist_path, content)
 
         with patch.object(data_guard, "ALLOWLIST_PATH", allowlist_path):
-            result = data_guard._load_allowlist()
+            result = data_guard.load_allowlist()
             assert result["assignments"] == {"threshold_value", "max_retries"}
             assert result["comparisons"] == {"timeout"}
             assert result["dataframe"] == {"pd.DataFrame"}
@@ -52,33 +52,30 @@ class TestAllowlistLoading:
 
         with patch.object(data_guard, "ALLOWLIST_PATH", allowlist_path):
             with pytest.raises(data_guard.DataGuardAllowlistError) as exc_info:
-                data_guard._load_allowlist()
+                data_guard.load_allowlist()
             assert "JSON parse error" in str(exc_info.value)
 
     def test_load_allowlist_coerces_types(self, tmp_path: Path) -> None:
         """Test that allowlist values are coerced to strings."""
         allowlist_path = tmp_path / "allowlist.json"
-        content = {
-            "assignments": [123, "string_value", True],
-            "comparisons": []
-        }
+        content = {"assignments": [123, "string_value", True], "comparisons": []}
         write_allowlist(allowlist_path, content)
 
         with patch.object(data_guard, "ALLOWLIST_PATH", allowlist_path):
-            result = data_guard._load_allowlist()
+            result = data_guard.load_allowlist()
             assert result["assignments"] == {"123", "string_value", "True"}
 
     def test_allowlisted_checks_membership(self, tmp_path: Path) -> None:
-        """Test _allowlisted helper function."""
+        """Test allowlisted helper function."""
         allowlist_path = tmp_path / "allowlist.json"
         content = {"assignments": ["allowed_var"]}
         write_allowlist(allowlist_path, content)
 
         with patch.object(data_guard, "ALLOWLIST_PATH", allowlist_path):
-            with patch.object(data_guard, "ALLOWLIST", data_guard._load_allowlist()):
-                assert data_guard._allowlisted("allowed_var", "assignments")
-                assert not data_guard._allowlisted("other_var", "assignments")
-                assert not data_guard._allowlisted("allowed_var", "comparisons")
+            with patch.object(data_guard, "ALLOWLIST", data_guard.load_allowlist()):
+                assert data_guard.allowlisted("allowed_var", "assignments")
+                assert not data_guard.allowlisted("other_var", "assignments")
+                assert not data_guard.allowlisted("allowed_var", "comparisons")
 
 
 class TestASTUtilities:
@@ -130,12 +127,12 @@ class TestASTUtilities:
 
     def test_is_all_caps_identifier(self) -> None:
         """Test constant identifier detection."""
-        assert data_guard._is_all_caps_identifier("MAX_RETRY")
-        assert data_guard._is_all_caps_identifier("TIMEOUT")
-        assert not data_guard._is_all_caps_identifier("max_retry")
-        assert not data_guard._is_all_caps_identifier("MaxRetry")
-        assert not data_guard._is_all_caps_identifier("")
-        assert not data_guard._is_all_caps_identifier("123")
+        assert data_guard.is_all_caps_identifier("MAX_RETRY")
+        assert data_guard.is_all_caps_identifier("TIMEOUT")
+        assert not data_guard.is_all_caps_identifier("max_retry")
+        assert not data_guard.is_all_caps_identifier("MaxRetry")
+        assert not data_guard.is_all_caps_identifier("")
+        assert not data_guard.is_all_caps_identifier("123")
 
     def test_is_numeric_constant(self) -> None:
         """Test numeric constant detection."""
@@ -179,7 +176,7 @@ class TestAssignmentViolations:
         assert isinstance(stmt, ast.Assign)
         names = list(data_guard.extract_target_names(stmt.targets[0]))
 
-        assert data_guard._should_flag_assignment(names, stmt.value)
+        assert data_guard.should_flag_assignment(names, stmt.value)
 
     def test_should_flag_assignment_constant_ignored(self) -> None:
         """Test that all-caps constants are not flagged."""
@@ -189,7 +186,7 @@ class TestAssignmentViolations:
         assert isinstance(stmt, ast.Assign)
         names = list(data_guard.extract_target_names(stmt.targets[0]))
 
-        assert not data_guard._should_flag_assignment(names, stmt.value)
+        assert not data_guard.should_flag_assignment(names, stmt.value)
 
     def test_should_flag_assignment_allowed_literals(self) -> None:
         """Test that 0, 1, -1 are not flagged."""
@@ -199,14 +196,14 @@ class TestAssignmentViolations:
             stmt = tree.body[0]
             assert isinstance(stmt, ast.Assign)
             names = list(data_guard.extract_target_names(stmt.targets[0]))
-            assert not data_guard._should_flag_assignment(names, stmt.value)
+            assert not data_guard.should_flag_assignment(names, stmt.value)
 
     def test_contains_sensitive_token(self) -> None:
         """Test sensitive token detection."""
-        assert data_guard._contains_sensitive_token(["threshold"])
-        assert data_guard._contains_sensitive_token(["max_value"])
-        assert data_guard._contains_sensitive_token(["retry_count"])
-        assert not data_guard._contains_sensitive_token(["regular_var"])
+        assert data_guard.contains_sensitive_token(["threshold"])
+        assert data_guard.contains_sensitive_token(["max_value"])
+        assert data_guard.contains_sensitive_token(["retry_count"])
+        assert not data_guard.contains_sensitive_token(["regular_var"])
 
     def test_assignment_violation_from_node_simple(self, tmp_path: Path) -> None:
         """Test creating violation from simple assignment."""
@@ -215,8 +212,12 @@ class TestAssignmentViolations:
         stmt = tree.body[0]
         assert isinstance(stmt, ast.Assign)
 
-        with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
-            violation = data_guard._assignment_violation_from_node(tmp_path / "test.py", stmt)
+        with patch.object(
+            data_guard,
+            "ALLOWLIST",
+            {"assignments": set(), "comparisons": set(), "dataframe": set()},
+        ):
+            violation = data_guard.assignment_violation_from_node(tmp_path / "test.py", stmt)
             assert violation is not None
             assert "literal assignment" in violation.message
             assert "threshold" in violation.message
@@ -228,8 +229,12 @@ class TestAssignmentViolations:
         stmt = tree.body[0]
         assert isinstance(stmt, ast.AnnAssign)
 
-        with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
-            violation = data_guard._assignment_violation_from_node(tmp_path / "test.py", stmt)
+        with patch.object(
+            data_guard,
+            "ALLOWLIST",
+            {"assignments": set(), "comparisons": set(), "dataframe": set()},
+        ):
+            violation = data_guard.assignment_violation_from_node(tmp_path / "test.py", stmt)
             assert violation is not None
             assert "annotated literal assignment" in violation.message
             assert "max_retries" in violation.message
@@ -245,12 +250,16 @@ class TestAssignmentViolations:
             MAX_THRESHOLD = 200
             timeout: int = 30
             regular_var = 50
-            """
+            """,
         )
 
         with patch.object(data_guard, "SCAN_DIRECTORIES", (tmp_path / "src",)):
             with patch.object(data_guard, "ROOT", tmp_path):
-                with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
+                with patch.object(
+                    data_guard,
+                    "ALLOWLIST",
+                    {"assignments": set(), "comparisons": set(), "dataframe": set()},
+                ):
                     violations = data_guard.collect_sensitive_assignments()
                     assert len(violations) >= 2  # threshold and timeout
                     messages = [v.message for v in violations]
@@ -263,10 +272,14 @@ class TestComparisonViolations:
 
     def test_should_flag_comparison_sensitive_name(self) -> None:
         """Test flagging comparison with sensitive name."""
-        with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
-            assert data_guard._should_flag_comparison(["threshold"])
-            assert not data_guard._should_flag_comparison(["THRESHOLD"])
-            assert not data_guard._should_flag_comparison([])
+        with patch.object(
+            data_guard,
+            "ALLOWLIST",
+            {"assignments": set(), "comparisons": set(), "dataframe": set()},
+        ):
+            assert data_guard.should_flag_comparison(["threshold"])
+            assert not data_guard.should_flag_comparison(["THRESHOLD"])
+            assert not data_guard.should_flag_comparison([])
 
     def test_literal_comparators(self) -> None:
         """Test extracting literal comparators."""
@@ -277,7 +290,7 @@ class TestComparisonViolations:
         assert isinstance(stmt.test, ast.Compare)
         compare = stmt.test
 
-        literals = data_guard._literal_comparators(compare)
+        literals = data_guard.literal_comparators(compare)
         assert len(literals) == 1
         assert literals[0].value == 100
 
@@ -291,7 +304,7 @@ class TestComparisonViolations:
             assert isinstance(stmt.test, ast.Compare)
             compare = stmt.test
 
-            literals = data_guard._literal_comparators(compare)
+            literals = data_guard.literal_comparators(compare)
             assert len(literals) == 0
 
     def test_comparison_targets(self) -> None:
@@ -303,7 +316,7 @@ class TestComparisonViolations:
         assert isinstance(stmt.test, ast.Compare)
         compare = stmt.test
 
-        targets = data_guard._comparison_targets(compare)
+        targets = data_guard.comparison_targets(compare)
         assert targets == ["threshold"]
 
     def test_format_comparison_message(self) -> None:
@@ -318,7 +331,7 @@ class TestComparisonViolations:
         assert len(compare.comparators) > 0
         assert isinstance(compare.comparators[0], ast.Constant)
         literals = [compare.comparators[0]]
-        message = data_guard._format_comparison_message(literals, ["threshold"])
+        message = data_guard.format_comparison_message(literals, ["threshold"])
         assert "comparison against literal" in message
         assert "100" in message
         assert "threshold" in message
@@ -336,12 +349,16 @@ class TestComparisonViolations:
                 if MAX_THRESHOLD < 200:
                     return False
                 return threshold == 50
-            """
+            """,
         )
 
         with patch.object(data_guard, "SCAN_DIRECTORIES", (tmp_path / "src",)):
             with patch.object(data_guard, "ROOT", tmp_path):
-                with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
+                with patch.object(
+                    data_guard,
+                    "ALLOWLIST",
+                    {"assignments": set(), "comparisons": set(), "dataframe": set()},
+                ):
                     violations = data_guard.collect_numeric_comparisons()
                     assert len(violations) >= 1
                     assert any("threshold" in v.message for v in violations)
@@ -415,7 +432,7 @@ class TestDataframeLiterals:
         assert isinstance(stmt.value, ast.Call)
         call = stmt.value
 
-        assert data_guard._call_contains_literal_arguments(call)
+        assert data_guard.call_contains_literal_arguments(call)
 
     def test_collect_dataframe_literals(self, tmp_path: Path) -> None:
         """Test collecting DataFrame calls with literal data."""
@@ -430,12 +447,16 @@ class TestDataframeLiterals:
                 df1 = pd.DataFrame([1, 2, 3])
                 df2 = pd.DataFrame(data)
                 return df1, df2
-            """
+            """,
         )
 
         with patch.object(data_guard, "SCAN_DIRECTORIES", (tmp_path / "src",)):
             with patch.object(data_guard, "ROOT", tmp_path):
-                with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
+                with patch.object(
+                    data_guard,
+                    "ALLOWLIST",
+                    {"assignments": set(), "comparisons": set(), "dataframe": set()},
+                ):
                     violations = data_guard.collect_dataframe_literals()
                     assert len(violations) >= 1
                     assert any("pd.DataFrame" in v.message for v in violations)
@@ -469,25 +490,19 @@ class TestIterators:
         assert normalized == "src/module.py"
 
 
-class TestViolationDataclass:
-    """Test Violation dataclass."""
+class TestMainFunction:
+    """Test main function and CLI behavior."""
 
     def test_violation_immutable(self, tmp_path: Path) -> None:
         """Test that Violation is frozen."""
         violation = data_guard.Violation(
-            path=tmp_path / "test.py",
-            lineno=42,
-            message="test violation"
+            path=tmp_path / "test.py", lineno=42, message="test violation"
         )
 
         with pytest.raises(Exception):  # FrozenInstanceError
             setattr(violation, "lineno", 43)
 
-
-class TestMainFunction:
-    """Test main function and CLI behavior."""
-
-    def test_main_no_violations(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_no_violations(self, tmp_path: Path) -> None:
         """Test main function with no violations."""
         target = tmp_path / "src" / "clean.py"
         target.parent.mkdir(parents=True)
@@ -496,16 +511,21 @@ class TestMainFunction:
             """
             def clean_function():
                 return 42
-            """
+            """,
         )
 
         with patch.object(data_guard, "SCAN_DIRECTORIES", (tmp_path / "src",)):
             with patch.object(data_guard, "ROOT", tmp_path):
-                with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
+                with patch.object(
+                    data_guard,
+                    "ALLOWLIST",
+                    {"assignments": set(), "comparisons": set(), "dataframe": set()},
+                ):
                     result = data_guard.main()
                     assert result == 0
 
-    def test_main_with_violations(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_with_violations(
+        self, tmp_path: Path    ) -> None:
         """Test main function with violations."""
         target = tmp_path / "src" / "violations.py"
         target.parent.mkdir(parents=True)
@@ -513,18 +533,23 @@ class TestMainFunction:
             target,
             """
             threshold = 100
-            """
+            """,
         )
 
         with patch.object(data_guard, "SCAN_DIRECTORIES", (tmp_path / "src",)):
             with patch.object(data_guard, "ROOT", tmp_path):
-                with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
+                with patch.object(
+                    data_guard,
+                    "ALLOWLIST",
+                    {"assignments": set(), "comparisons": set(), "dataframe": set()},
+                ):
                     with pytest.raises(data_guard.DataGuardViolation) as exc_info:
                         data_guard.main()
                     assert "Data integrity violations detected" in str(exc_info.value)
                     assert "threshold" in str(exc_info.value)
 
-    def test_main_script_entry_point(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_main_script_entry_point(
+        self, tmp_path: Path    ) -> None:
         """Test __main__ entry point."""
         target = tmp_path / "src" / "test.py"
         target.parent.mkdir(parents=True)
@@ -534,13 +559,13 @@ class TestMainFunction:
         # Instead, test that main() can be called successfully
         with patch.object(data_guard, "SCAN_DIRECTORIES", (tmp_path / "src",)):
             with patch.object(data_guard, "ROOT", tmp_path):
-                with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
+                with patch.object(
+                    data_guard,
+                    "ALLOWLIST",
+                    {"assignments": set(), "comparisons": set(), "dataframe": set()},
+                ):
                     result = data_guard.main()
                     assert result == 0
-
-
-class TestCollectAllViolations:
-    """Test comprehensive violation collection."""
 
     def test_collect_all_violations_comprehensive(self, tmp_path: Path) -> None:
         """Test collecting all types of violations."""
@@ -563,12 +588,16 @@ class TestCollectAllViolations:
             # DataFrame literal violation
             def create_data():
                 return pd.DataFrame([1, 2, 3])
-            """
+            """,
         )
 
         with patch.object(data_guard, "SCAN_DIRECTORIES", (tmp_path / "src",)):
             with patch.object(data_guard, "ROOT", tmp_path):
-                with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
+                with patch.object(
+                    data_guard,
+                    "ALLOWLIST",
+                    {"assignments": set(), "comparisons": set(), "dataframe": set()},
+                ):
                     violations = data_guard.collect_all_violations()
                     assert len(violations) >= 3
 

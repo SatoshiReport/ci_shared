@@ -70,6 +70,7 @@ class TestCodexCliError:
         assert "(no output)" in str(error)
 
 
+# pylint: disable=too-few-public-methods
 class TestCommitMessageError:
     """Tests for CommitMessageError exception."""
 
@@ -151,6 +152,7 @@ class TestGitCommandAbort:
         assert "status 128" in str(abort)
         assert "failed to push" in str(abort)
 
+# pylint: disable=too-few-public-methods
 
 class TestRepositoryStateAbort:
     """Tests for RepositoryStateAbort exception."""
@@ -160,6 +162,7 @@ class TestRepositoryStateAbort:
         abort = RepositoryStateAbort.detached_head()
         assert "detached HEAD detected" in str(abort)
         assert "checkout a branch" in str(abort)
+# pylint: disable=too-few-public-methods
 
 
 class TestModelSelectionAbort:
@@ -167,10 +170,9 @@ class TestModelSelectionAbort:
 
     def test_unsupported_model_factory(self):
         """Test unsupported_model factory method."""
-        abort = ModelSelectionAbort.unsupported_model(
-            received="gpt-4", required="gpt-5-codex"
-        )
+        abort = ModelSelectionAbort.unsupported_model(received="gpt-4", required="gpt-5-codex")
         assert "gpt-5-codex" in str(abort)
+# pylint: disable=too-few-public-methods
         assert "gpt-4" in str(abort)
 
 
@@ -231,6 +233,7 @@ class TestCommandResult:
 
     def test_combined_output_empty(self):
         """Test combined_output with empty streams."""
+# pylint: disable=too-few-public-methods
         result = CommandResult(returncode=0, stdout="", stderr="")
         assert result.combined_output == ""
 
@@ -282,9 +285,7 @@ class TestFailureContext:
 
     def test_creation_with_coverage_report(self):
         """Test FailureContext with coverage report."""
-        coverage = CoverageCheckResult(
-            table_text="coverage table", deficits=[], threshold=80.0
-        )
+        coverage = CoverageCheckResult(table_text="coverage table", deficits=[], threshold=80.0)
         context = FailureContext(
             log_excerpt="",
             summary="",
@@ -336,9 +337,7 @@ class TestPatchAttemptState:
 
     def test_record_failure_exhausts_retries(self):
         """Test record_failure raises when retries exhausted."""
-        state = PatchAttemptState(
-            max_attempts=3, patch_attempt=3, extra_retry_budget=0
-        )
+        state = PatchAttemptState(max_attempts=3, patch_attempt=3, extra_retry_budget=0)
         with pytest.raises(PatchLifecycleAbort) as exc_info:
             state.record_failure("final error", retryable=True)
         assert "exhausting retries" in str(exc_info.value)
@@ -384,6 +383,7 @@ class TestPatchApplyError:
         assert error.retryable is True
 
     def test_custom_retryable_flag(self):
+# pylint: disable=too-few-public-methods
         """Test PatchApplyError with custom retryable flag."""
         error = PatchApplyError(detail="fatal", retryable=False)
         assert error.retryable is False
@@ -420,7 +420,7 @@ class TestCoverageCheckResult:
     def test_creation_no_deficits(self):
         """Test CoverageCheckResult with no deficits."""
         result = CoverageCheckResult(table_text="", deficits=[], threshold=80.0)
-        assert result.deficits == []
+        assert not result.deficits
 
 
 class TestPatchPrompt:

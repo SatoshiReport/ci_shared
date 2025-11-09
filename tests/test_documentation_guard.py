@@ -1,3 +1,5 @@
+"""Unit tests for documentation_guard module."""
+
 from __future__ import annotations
 
 import sys
@@ -31,14 +33,14 @@ class TestDiscoverSrcModules:
     def test_discover_src_modules_no_src_directory(self, tmp_path: Path) -> None:
         """Test when src directory doesn't exist."""
         result = documentation_guard.discover_src_modules(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_src_modules_empty_src(self, tmp_path: Path) -> None:
         """Test empty src directory."""
         src = tmp_path / "src"
         src.mkdir()
         result = documentation_guard.discover_src_modules(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_src_modules_with_python_files(self, tmp_path: Path) -> None:
         """Test discovering modules with Python files."""
@@ -97,7 +99,7 @@ class TestDiscoverSrcModules:
         (src / "script.py").write_text("# script")
 
         result = documentation_guard.discover_src_modules(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_src_modules_no_python_files(self, tmp_path: Path) -> None:
         """Test that modules without Python files are not required."""
@@ -107,7 +109,7 @@ class TestDiscoverSrcModules:
         (module / "data.txt").write_text("data")
 
         result = documentation_guard.discover_src_modules(tmp_path)
-        assert result == []
+        assert not result
 
 
 class TestDiscoverArchitectureDocs:
@@ -116,7 +118,7 @@ class TestDiscoverArchitectureDocs:
     def test_discover_architecture_docs_no_directory(self, tmp_path: Path) -> None:
         """Test when docs/architecture doesn't exist."""
         result = documentation_guard.discover_architecture_docs(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_architecture_docs_empty(self, tmp_path: Path) -> None:
         """Test empty architecture directory."""
@@ -124,7 +126,7 @@ class TestDiscoverArchitectureDocs:
         arch_dir.mkdir(parents=True)
 
         result = documentation_guard.discover_architecture_docs(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_architecture_docs_with_markdown(self, tmp_path: Path) -> None:
         """Test discovering architecture docs with markdown files."""
@@ -143,7 +145,7 @@ class TestDiscoverArchitectureDocs:
         (arch_dir / "diagram.png").write_text("image")
 
         result = documentation_guard.discover_architecture_docs(tmp_path)
-        assert result == []
+        assert not result
 
 
 class TestDiscoverDomainDocs:
@@ -152,7 +154,7 @@ class TestDiscoverDomainDocs:
     def test_discover_domain_docs_no_directory(self, tmp_path: Path) -> None:
         """Test when docs/domains doesn't exist."""
         result = documentation_guard.discover_domain_docs(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_domain_docs_empty(self, tmp_path: Path) -> None:
         """Test empty domains directory."""
@@ -160,7 +162,7 @@ class TestDiscoverDomainDocs:
         domains_dir.mkdir(parents=True)
 
         result = documentation_guard.discover_domain_docs(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_domain_docs_with_subdirs(self, tmp_path: Path) -> None:
         """Test discovering domain docs with subdirectories."""
@@ -196,7 +198,7 @@ class TestDiscoverDomainDocs:
         (domains_dir / "overview.md").write_text("# Overview")
 
         result = documentation_guard.discover_domain_docs(tmp_path)
-        assert result == []
+        assert not result
 
 
 class TestDiscoverOperationsDocs:
@@ -205,7 +207,7 @@ class TestDiscoverOperationsDocs:
     def test_discover_operations_docs_no_directory(self, tmp_path: Path) -> None:
         """Test when docs/operations doesn't exist."""
         result = documentation_guard.discover_operations_docs(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_operations_docs_exists(self, tmp_path: Path) -> None:
         """Test when docs/operations exists."""
@@ -222,7 +224,7 @@ class TestDiscoverReferenceDocs:
     def test_discover_reference_docs_no_directory(self, tmp_path: Path) -> None:
         """Test when docs/reference doesn't exist."""
         result = documentation_guard.discover_reference_docs(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_reference_docs_empty(self, tmp_path: Path) -> None:
         """Test empty reference directory."""
@@ -230,7 +232,7 @@ class TestDiscoverReferenceDocs:
         ref_dir.mkdir(parents=True)
 
         result = documentation_guard.discover_reference_docs(tmp_path)
-        assert result == []
+        assert not result
 
     def test_discover_reference_docs_with_subdirs(self, tmp_path: Path) -> None:
         """Test discovering reference docs with subdirectories."""
@@ -325,7 +327,7 @@ class TestDiscoverAllRequirements:
         ref = tmp_path / "docs" / "reference" / "api"
         ref.mkdir(parents=True)
 
-        required, info = documentation_guard.discover_all_requirements(tmp_path)
+        required, _info = documentation_guard.discover_all_requirements(tmp_path)
 
         assert "README.md" in required
         assert "CLAUDE.md" in required
@@ -338,7 +340,7 @@ class TestDiscoverAllRequirements:
 
     def test_discover_all_requirements_info_structure(self, tmp_path: Path) -> None:
         """Test that discovery info has correct structure."""
-        required, info = documentation_guard.discover_all_requirements(tmp_path)
+        _required, info = documentation_guard.discover_all_requirements(tmp_path)
 
         assert isinstance(info["base"], list)
         assert isinstance(info["modules"], list)
@@ -358,7 +360,7 @@ class TestCheckRequiredDocs:
 
         required = ["README.md", "CLAUDE.md"]
         missing = documentation_guard.check_required_docs(tmp_path, required)
-        assert missing == []
+        assert not missing
 
     def test_check_required_docs_some_missing(self, tmp_path: Path) -> None:
         """Test when some required docs are missing."""
@@ -381,29 +383,25 @@ class TestCheckRequiredDocs:
 class TestGroupMissingDocs:
     """Test grouping missing documentation."""
 
-    def test_group_missing_docs_by_category(self) -> None:
+    def testgroup_missing_docs_by_category(self) -> None:
         """Test grouping missing docs by category."""
-        missing = [
-            "README.md",
-            "src/module1/README.md",
-            "docs/architecture/README.md"
-        ]
+        missing = ["README.md", "src/module1/README.md", "docs/architecture/README.md"]
         discovery_info = {
             "base": ["README.md"],
             "modules": ["src/module1/README.md"],
             "architecture": ["docs/architecture/README.md"],
             "domains": [],
             "operations": [],
-            "reference": []
+            "reference": [],
         }
 
-        grouped = documentation_guard._group_missing_docs(missing, discovery_info)
+        grouped = documentation_guard.group_missing_docs(missing, discovery_info)
 
         assert "README.md" in grouped["Base"]
         assert "src/module1/README.md" in grouped["Modules"]
         assert "docs/architecture/README.md" in grouped["Architecture"]
 
-    def test_group_missing_docs_empty(self) -> None:
+    def testgroup_missing_docs_empty(self) -> None:
         """Test grouping with no missing docs."""
         missing = []
         discovery_info = {
@@ -412,10 +410,10 @@ class TestGroupMissingDocs:
             "architecture": [],
             "domains": [],
             "operations": [],
-            "reference": []
+            "reference": [],
         }
 
-        grouped = documentation_guard._group_missing_docs(missing, discovery_info)
+        grouped = documentation_guard.group_missing_docs(missing, discovery_info)
 
         assert all(len(docs) == 0 for docs in grouped.values())
 
@@ -423,7 +421,7 @@ class TestGroupMissingDocs:
 class TestPrintFunctions:
     """Test output printing functions."""
 
-    def test_print_failure_report(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def testprint_failure_report(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test failure report printing."""
         grouped = {
             "Base": ["README.md"],
@@ -431,19 +429,19 @@ class TestPrintFunctions:
             "Architecture": [],
             "Domains": [],
             "Operations": [],
-            "Reference": []
+            "Reference": [],
         }
 
-        documentation_guard._print_failure_report(grouped)
+        documentation_guard.print_failure_report(grouped)
         captured = capsys.readouterr()
 
         assert "Documentation Guard: FAILED" in captured.err
         assert "README.md" in captured.err
         assert "src/module1/README.md" in captured.err
 
-    def test_print_success(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def testprint_success(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test success message printing."""
-        documentation_guard._print_success(5)
+        documentation_guard.print_success(5)
         captured = capsys.readouterr()
 
         assert "documentation_guard" in captured.err
@@ -454,16 +452,22 @@ class TestPrintFunctions:
 class TestMainFunction:
     """Test main function and CLI behavior."""
 
-    def test_main_root_does_not_exist(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_root_does_not_exist(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test main with non-existent root."""
-        with patch.object(sys, "argv", ["documentation_guard.py", "--root", str(tmp_path / "missing")]):
+        with patch.object(
+            sys, "argv", ["documentation_guard.py", "--root", str(tmp_path / "missing")]
+        ):
             result = documentation_guard.main()
             assert result == 1
 
             captured = capsys.readouterr()
             assert "does not exist" in captured.err
 
-    def test_main_all_docs_present(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_all_docs_present(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test main when all required docs are present."""
         (tmp_path / "README.md").write_text("# README")
 
@@ -489,7 +493,8 @@ class TestMainFunction:
             assert "README.md" in captured.err
             assert "src/module1/README.md" in captured.err
 
-    def test_main_complex_structure(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_complex_structure(
+        self, tmp_path: Path    ) -> None:
         """Test main with complex directory structure."""
         # Create required base docs
         (tmp_path / "README.md").write_text("# README")
@@ -528,6 +533,7 @@ class TestMainFunction:
             assert result == 0
 
 
+# pylint: disable=too-few-public-methods
 class TestCategoryKeys:
     """Test CATEGORY_KEYS constant."""
 

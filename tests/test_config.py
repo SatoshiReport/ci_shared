@@ -18,6 +18,9 @@ from ci_tools.ci_runtime.config import (
     REPO_CONFIG,
     REPO_CONTEXT,
     REPO_ROOT,
+    _coerce_coverage_threshold,
+    _coerce_protected_prefixes,
+    _coerce_repo_context,
     REQUIRED_MODEL,
     RISKY_PATTERNS,
     detect_repo_root,
@@ -54,9 +57,11 @@ class TestConstants:
 
         matched = False
         for pattern in RISKY_PATTERNS:
-            if pattern.search(dangerous_sql) or pattern.search(
-                dangerous_rm
-            ) or pattern.search(dangerous_subprocess):
+            if (
+                pattern.search(dangerous_sql)
+                or pattern.search(dangerous_rm)
+                or pattern.search(dangerous_subprocess)
+            ):
                 matched = True
                 break
         assert matched, "RISKY_PATTERNS should match dangerous patterns"
@@ -96,9 +101,7 @@ class TestDetectRepoRoot:
 
     def test_detect_repo_root_git_failure_returns_cwd(self):
         """Test detect_repo_root falls back to cwd when git fails."""
-        with patch(
-            "subprocess.run", side_effect=subprocess.CalledProcessError(1, "git")
-        ):
+        with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "git")):
             result = detect_repo_root()
             assert result == Path.cwd()
 
@@ -155,7 +158,7 @@ class TestLoadRepoConfig:
     def test_load_repo_config_no_file_returns_empty(self, tmp_path):
         """Test loading returns empty dict when no config file exists."""
         result = load_repo_config(tmp_path)
-        assert result == {}
+        assert not result
 
     def test_load_repo_config_invalid_json(self, tmp_path, capsys):
         """Test loading handles invalid JSON gracefully."""
@@ -163,7 +166,7 @@ class TestLoadRepoConfig:
         config_file.write_text("{ invalid json }")
 
         result = load_repo_config(tmp_path)
-        assert result == {}
+        assert not result
 
         captured = capsys.readouterr()
         assert "warning" in captured.err.lower()
@@ -175,7 +178,7 @@ class TestLoadRepoConfig:
         config_file.write_text(json.dumps(["not", "a", "dict"]))
 
         result = load_repo_config(tmp_path)
-        assert result == {}
+        assert not result
 
     def test_load_repo_config_empty_json(self, tmp_path):
         """Test loading empty JSON object."""
@@ -183,7 +186,7 @@ class TestLoadRepoConfig:
         config_file.write_text(json.dumps({}))
 
         result = load_repo_config(tmp_path)
-        assert result == {}
+        assert not result
 
     def test_load_repo_config_complex_structure(self, tmp_path):
         """Test loading config with nested structure."""
@@ -205,7 +208,6 @@ class TestCoercionFunctions:
 
     def test_coerce_repo_context_with_string(self):
         """Test _coerce_repo_context with string value."""
-        from ci_tools.ci_runtime.config import _coerce_repo_context
 
         config = {"repo_context": "Custom context"}
         result = _coerce_repo_context(config, "default")
@@ -213,7 +215,6 @@ class TestCoercionFunctions:
 
     def test_coerce_repo_context_missing_uses_default(self):
         """Test _coerce_repo_context uses default when key missing."""
-        from ci_tools.ci_runtime.config import _coerce_repo_context
 
         config = {}
         result = _coerce_repo_context(config, "default context")
@@ -221,7 +222,6 @@ class TestCoercionFunctions:
 
     def test_coerce_repo_context_wrong_type_uses_default(self):
         """Test _coerce_repo_context uses default for non-string value."""
-        from ci_tools.ci_runtime.config import _coerce_repo_context
 
         config = {"repo_context": 123}
         result = _coerce_repo_context(config, "default")
@@ -229,7 +229,6 @@ class TestCoercionFunctions:
 
     def test_coerce_protected_prefixes_with_list(self):
         """Test _coerce_protected_prefixes with list value."""
-        from ci_tools.ci_runtime.config import _coerce_protected_prefixes
 
         config = {"protected_path_prefixes": ["path1/", "path2/"]}
         result = _coerce_protected_prefixes(config, ["default/"])
@@ -237,7 +236,6 @@ class TestCoercionFunctions:
 
     def test_coerce_protected_prefixes_with_tuple(self):
         """Test _coerce_protected_prefixes with tuple value."""
-        from ci_tools.ci_runtime.config import _coerce_protected_prefixes
 
         config = {"protected_path_prefixes": ("path1/", "path2/")}
         result = _coerce_protected_prefixes(config, ["default/"])
@@ -245,7 +243,6 @@ class TestCoercionFunctions:
 
     def test_coerce_protected_prefixes_with_set(self):
         """Test _coerce_protected_prefixes with set value."""
-        from ci_tools.ci_runtime.config import _coerce_protected_prefixes
 
         config = {"protected_path_prefixes": {"path1/", "path2/"}}
         result = _coerce_protected_prefixes(config, ["default/"])
@@ -254,7 +251,6 @@ class TestCoercionFunctions:
 
     def test_coerce_protected_prefixes_missing_uses_default(self):
         """Test _coerce_protected_prefixes uses default when key missing."""
-        from ci_tools.ci_runtime.config import _coerce_protected_prefixes
 
         config = {}
         result = _coerce_protected_prefixes(config, ["default/"])
@@ -262,7 +258,6 @@ class TestCoercionFunctions:
 
     def test_coerce_protected_prefixes_wrong_type_uses_default(self):
         """Test _coerce_protected_prefixes uses default for wrong type."""
-        from ci_tools.ci_runtime.config import _coerce_protected_prefixes
 
         config = {"protected_path_prefixes": "not a list"}
         result = _coerce_protected_prefixes(config, ["default/"])
@@ -270,7 +265,6 @@ class TestCoercionFunctions:
 
     def test_coerce_coverage_threshold_with_float(self):
         """Test _coerce_coverage_threshold with float value."""
-        from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
         config = {"coverage_threshold": COVERAGE_VALUES["float_example"]}
         result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
@@ -278,7 +272,6 @@ class TestCoercionFunctions:
 
     def test_coerce_coverage_threshold_with_int(self):
         """Test _coerce_coverage_threshold with int value."""
-        from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
         config = {"coverage_threshold": COVERAGE_VALUES["int_example"]}
         result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
@@ -286,7 +279,6 @@ class TestCoercionFunctions:
 
     def test_coerce_coverage_threshold_with_string(self):
         """Test _coerce_coverage_threshold with string value."""
-        from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
         config = {"coverage_threshold": str(COVERAGE_VALUES["string_example"])}
         result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
@@ -294,7 +286,6 @@ class TestCoercionFunctions:
 
     def test_coerce_coverage_threshold_missing_uses_default(self):
         """Test _coerce_coverage_threshold uses default when key missing."""
-        from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
         config = {}
         result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])
@@ -302,7 +293,6 @@ class TestCoercionFunctions:
 
     def test_coerce_coverage_threshold_invalid_string_uses_default(self):
         """Test _coerce_coverage_threshold uses default for invalid string."""
-        from ci_tools.ci_runtime.config import _coerce_coverage_threshold
 
         config = {"coverage_threshold": "not-a-number"}
         result = _coerce_coverage_threshold(config, COVERAGE_VALUES["default"])

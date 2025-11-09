@@ -144,5 +144,5 @@ max-statements = 50
 [tool.pylint.MAIN]
 init-hook = "import sys; sys.path.insert(0, 'tests')"
 
-[tool.pylint."MESSAGES CONTROL"]
-disable = []
+[tool.pylint.SIMILARITIES]
+min-similarity-lines = 7

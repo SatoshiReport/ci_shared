@@ -1,3 +1,5 @@
+"""Unit tests for inheritance_guard module."""
+
 from __future__ import annotations
 
 import textwrap
@@ -6,43 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from ci_tools.scripts import inheritance_guard
-from ci_tools.scripts.guard_common import is_excluded, iter_python_files
-
 from conftest import write_module
-
-
-def test_iter_python_files_single_file(tmp_path: Path):
-    """Test iter_python_files with a single file."""
-    py_file = tmp_path / "test.py"
-    py_file.write_text("# test")
-
-    files = list(iter_python_files(py_file))
-    assert len(files) == 1
-    assert files[0] == py_file
-
-
-def test_iter_python_files_non_python_file(tmp_path: Path):
-    """Test iter_python_files with a non-Python file."""
-    txt_file = tmp_path / "test.txt"
-    txt_file.write_text("# test")
-
-    files = list(iter_python_files(txt_file))
-    assert len(files) == 0
-
-
-def test_is_excluded_basic():
-    """Test basic exclusion logic."""
-    path = Path("/project/src/module.py").resolve()
-    exclusions = [Path("/project/src").resolve()]
-    assert is_excluded(path, exclusions) is True
-
-
-def test_is_excluded_no_match():
-    """Test exclusion with no match."""
-    path = Path("/project/src/module.py").resolve()
-    exclusions = [Path("/project/tests").resolve()]
-    assert is_excluded(path, exclusions) is False
+from ci_tools.scripts import inheritance_guard
 
 
 def test_extract_base_names_simple():
@@ -97,7 +64,7 @@ def test_extract_base_names_no_bases():
     assert isinstance(stmt, inheritance_guard.ast.ClassDef)
 
     base_names = inheritance_guard.extract_base_names(stmt)
-    assert base_names == []
+    assert not base_names
 
 
 def test_build_class_hierarchy_basic():

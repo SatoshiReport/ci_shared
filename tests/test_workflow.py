@@ -149,7 +149,7 @@ class TestDeriveRuntimeFlags:
             auto_push_enabled,
         ) = _derive_runtime_flags(args, command_tokens)
         assert automation_mode is False
-        assert command_env == {}
+        assert not command_env
         assert auto_stage_enabled is False
         assert commit_message_enabled is False
         assert auto_push_enabled is False
@@ -159,11 +159,11 @@ class TestDeriveRuntimeFlags:
         args = Mock(auto_stage=True, commit_message=False)
         command_tokens = ["pytest"]
         (
-            automation_mode,
-            command_env,
+            _automation_mode,
+            _command_env,
             auto_stage_enabled,
-            commit_message_enabled,
-            auto_push_enabled,
+            _commit_message_enabled,
+            _auto_push_enabled,
         ) = _derive_runtime_flags(args, command_tokens)
         assert auto_stage_enabled is True
 
@@ -172,11 +172,11 @@ class TestDeriveRuntimeFlags:
         args = Mock(auto_stage=False, commit_message=True)
         command_tokens = ["make", "test"]
         (
-            automation_mode,
-            command_env,
-            auto_stage_enabled,
+            _automation_mode,
+            _command_env,
+            _auto_stage_enabled,
             commit_message_enabled,
-            auto_push_enabled,
+            _auto_push_enabled,
         ) = _derive_runtime_flags(args, command_tokens)
         assert commit_message_enabled is True
 
@@ -186,10 +186,10 @@ class TestDeriveRuntimeFlags:
         command_tokens = []
         (
             automation_mode,
-            command_env,
-            auto_stage_enabled,
-            commit_message_enabled,
-            auto_push_enabled,
+            _command_env,
+            _auto_stage_enabled,
+            _commit_message_enabled,
+            _auto_push_enabled,
         ) = _derive_runtime_flags(args, command_tokens)
         assert automation_mode is False
 
@@ -200,9 +200,7 @@ class TestConfigureRuntime:
     @patch("ci_tools.ci_runtime.workflow.load_env_settings")
     @patch("ci_tools.ci_runtime.config.resolve_model_choice")
     @patch("ci_tools.ci_runtime.config.resolve_reasoning_choice")
-    def test_creates_runtime_options(
-        self, mock_reasoning, mock_model, mock_load_env
-    ):
+    def test_creates_runtime_options(self, mock_reasoning, mock_model, mock_load_env):
         """Test creating RuntimeOptions from parsed args."""
         mock_model.return_value = "gpt-5-codex"
         mock_reasoning.return_value = "high"
@@ -229,9 +227,7 @@ class TestConfigureRuntime:
     @patch("ci_tools.ci_runtime.workflow.load_env_settings")
     @patch("ci_tools.ci_runtime.config.resolve_model_choice")
     @patch("ci_tools.ci_runtime.config.resolve_reasoning_choice")
-    def test_handles_automation_mode(
-        self, mock_reasoning, mock_model, mock_load_env
-    ):
+    def test_handles_automation_mode(self, mock_reasoning, mock_model, _mock_load_env):
         """Test automation mode flags are set correctly."""
         mock_model.return_value = "gpt-5-codex"
         mock_reasoning.return_value = "high"
@@ -256,15 +252,13 @@ class TestConfigureRuntime:
     @patch("ci_tools.ci_runtime.workflow.load_env_settings")
     @patch("ci_tools.ci_runtime.config.resolve_model_choice")
     @patch("ci_tools.ci_runtime.config.resolve_reasoning_choice")
-    def test_parses_command_with_spaces(
-        self, mock_reasoning, mock_model, mock_load_env
-    ):
+    def test_parses_command_with_spaces(self, mock_reasoning, mock_model, _mock_load_env):
         """Test parsing command with spaces and arguments."""
         mock_model.return_value = "gpt-5-codex"
         mock_reasoning.return_value = "medium"
 
         args = Mock(
-            command='pytest tests/ -v --cov=src',
+            command="pytest tests/ -v --cov=src",
             env_file="~/.env",
             model=None,
             reasoning_effort=None,
@@ -291,9 +285,7 @@ class TestPerformDryRun:
         result = perform_dry_run(args, options)
 
         assert result == 0
-        mock_run.assert_called_once_with(
-            ["./scripts/ci.sh"], live=True, env={}
-        )
+        mock_run.assert_called_once_with(["./scripts/ci.sh"], live=True, env={})
 
     @patch("ci_tools.ci_runtime.workflow.run_command")
     def test_returns_failure_code(self, mock_run):
@@ -316,6 +308,7 @@ class TestPerformDryRun:
         assert result is None
 
 
+# pylint: disable=too-few-public-methods
 class TestCollectWorktreeDiffs:
     """Tests for _collect_worktree_diffs function."""
 
@@ -376,6 +369,7 @@ class TestStageIfNeeded:
 
         assert result == "existing diff"
 
+# pylint: disable=too-few-public-methods
 
 class TestWarnMissingStagedChanges:
     """Tests for _warn_missing_staged_changes function."""
@@ -403,9 +397,7 @@ class TestMaybeRequestCommitMessage:
             auto_push_enabled=False,
         )
 
-        summary, body = _maybe_request_commit_message(
-            options, "staged diff", "extra context"
-        )
+        summary, body = _maybe_request_commit_message(options, "staged diff", "extra context")
 
         assert summary == "feat: add feature"
         assert body == ["Details here"]
@@ -424,7 +416,7 @@ class TestMaybeRequestCommitMessage:
         summary, body = _maybe_request_commit_message(options, "diff", "")
 
         assert summary is None
-        assert body == []
+        assert not body
 
     @patch("ci_tools.ci_runtime.workflow.request_commit_message")
     def test_detailed_mode_for_auto_push(self, mock_request):
@@ -453,9 +445,7 @@ class TestMaybePushOrNotify:
 
         _maybe_push_or_notify(options, "commit summary", ["body line"])
 
-        mock_commit.assert_called_once_with(
-            "commit summary", ["body line"], push=True
-        )
+        mock_commit.assert_called_once_with("commit summary", ["body line"], push=True)
 
     @patch("ci_tools.ci_runtime.workflow.commit_and_push")
     def test_uses_default_summary_when_none(self, mock_commit):
@@ -501,9 +491,7 @@ class TestFinalizeWorktree:
 
     @patch("ci_tools.ci_runtime.workflow._collect_worktree_diffs")
     @patch("ci_tools.ci_runtime.workflow._stage_if_needed")
-    def test_warns_when_no_staged_changes_after_staging(
-        self, mock_stage, mock_collect
-    ):
+    def test_warns_when_no_staged_changes_after_staging(self, mock_stage, mock_collect):
         """Test warning when no staged changes after staging."""
         mock_collect.return_value = ("unstaged", "")
         mock_stage.return_value = ""
@@ -561,9 +549,7 @@ class TestRunRepairIterations:
     @patch("ci_tools.ci_runtime.workflow.extract_coverage_deficits")
     @patch("ci_tools.ci_runtime.workflow.build_failure_context")
     @patch("ci_tools.ci_runtime.workflow.request_and_apply_patches")
-    def test_iterates_until_success(
-        self, mock_patches, mock_failure, mock_coverage, mock_run
-    ):
+    def test_iterates_until_success(self, mock_patches, mock_failure, mock_coverage, mock_run):
         """Test iterating until CI succeeds."""
         # First two iterations fail, third succeeds
         mock_run.side_effect = [
@@ -586,7 +572,7 @@ class TestRunRepairIterations:
     @patch("ci_tools.ci_runtime.workflow.build_failure_context")
     @patch("ci_tools.ci_runtime.workflow.request_and_apply_patches")
     def test_raises_when_max_iterations_exceeded(
-        self, mock_patches, mock_failure, mock_coverage, mock_run
+        self, _mock_patches, mock_failure, mock_coverage, mock_run
     ):
         """Test raising exception when max iterations exceeded."""
         mock_run.return_value = Mock(returncode=1, ok=False, combined_output="fail")
@@ -604,9 +590,7 @@ class TestRunRepairIterations:
     @patch("ci_tools.ci_runtime.workflow.extract_coverage_deficits")
     @patch("ci_tools.ci_runtime.workflow.build_failure_context")
     @patch("ci_tools.ci_runtime.workflow.request_and_apply_patches")
-    def test_handles_coverage_deficits(
-        self, mock_patches, mock_failure, mock_coverage, mock_run
-    ):
+    def test_handles_coverage_deficits(self, mock_patches, mock_failure, mock_coverage, mock_run):
         """Test handling coverage deficits even when CI passes."""
         mock_run.side_effect = [
             Mock(returncode=0, ok=True, combined_output="coverage: 70%"),
@@ -699,9 +683,7 @@ class TestParseArgs:
 
     def test_boolean_flags(self):
         """Test boolean flag arguments."""
-        args = parse_args(
-            ["--dry-run", "--auto-stage", "--commit-message"]
-        )
+        args = parse_args(["--dry-run", "--auto-stage", "--commit-message"])
 
         assert args.dry_run is True
         assert args.auto_stage is True
@@ -759,6 +741,7 @@ class TestMain:
     @patch("ci_tools.ci_runtime.workflow.perform_dry_run")
     @patch("ci_tools.ci_runtime.workflow.run_repair_iterations")
     @patch("ci_tools.ci_runtime.workflow.finalize_worktree")
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def test_successful_workflow(
         self, mock_finalize, mock_repair, mock_dry_run, mock_config, mock_parse
     ):
@@ -778,9 +761,7 @@ class TestMain:
     @patch("ci_tools.ci_runtime.workflow.configure_runtime")
     @patch("ci_tools.ci_runtime.workflow.perform_dry_run")
     @patch("ci_tools.ci_runtime.workflow.run_repair_iterations")
-    def test_handles_keyboard_interrupt(
-        self, mock_repair, mock_dry_run, mock_config, mock_parse
-    ):
+    def test_handles_keyboard_interrupt(self, mock_repair, mock_dry_run, mock_config, mock_parse):
         """Test handling Ctrl-C gracefully."""
         mock_parse.return_value = Mock()
         mock_config.return_value = Mock()
@@ -795,9 +776,7 @@ class TestMain:
     @patch("ci_tools.ci_runtime.workflow.configure_runtime")
     @patch("ci_tools.ci_runtime.workflow.perform_dry_run")
     @patch("ci_tools.ci_runtime.workflow.run_repair_iterations")
-    def test_handles_ci_abort(
-        self, mock_repair, mock_dry_run, mock_config, mock_parse
-    ):
+    def test_handles_ci_abort(self, mock_repair, mock_dry_run, mock_config, mock_parse):
         """Test handling CiAbort exception."""
         mock_parse.return_value = Mock()
         mock_config.return_value = Mock()
@@ -825,7 +804,7 @@ class TestMain:
     @patch("ci_tools.ci_runtime.workflow.run_repair_iterations")
     @patch("ci_tools.ci_runtime.workflow.finalize_worktree")
     def test_passes_custom_argv(
-        self, mock_finalize, mock_repair, mock_dry_run, mock_config, mock_parse
+        self, mock_finalize, _mock_repair, mock_dry_run, mock_config, mock_parse
     ):
         """Test passing custom argv to parse_args."""
         mock_parse.return_value = Mock()

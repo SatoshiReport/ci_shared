@@ -35,7 +35,8 @@ SKIPPED_CONSTRUCTOR_NAMES = {
 }
 
 
-def _callee_name(node: ast.Call) -> Optional[str]:
+def callee_name(node: ast.Call) -> Optional[str]:
+    """Extract the name of the called function or method."""
     if isinstance(node.func, ast.Name):
         return node.func.id
     if isinstance(node.func, ast.Attribute):
@@ -43,7 +44,8 @@ def _callee_name(node: ast.Call) -> Optional[str]:
     return None
 
 
-def _is_constructor_name(name: str) -> bool:
+def is_constructor_name(name: str) -> bool:
+    """Check if a name looks like a constructor."""
     if not name:
         return False
     return name[0].isupper() and name not in SKIPPED_CONSTRUCTOR_NAMES
@@ -55,10 +57,10 @@ def count_instantiations(func_node: ast.FunctionDef) -> tuple[int, List[str]]:
     instantiated_classes: List[str] = []
     for node in iter_ast_nodes(func_node, ast.Call):
         assert isinstance(node, ast.Call)  # Type narrowing for pyright
-        callee_name = _callee_name(node)
-        if callee_name and _is_constructor_name(callee_name):
+        callee = callee_name(node)
+        if callee and is_constructor_name(callee):
             count += 1
-            instantiated_classes.append(callee_name)
+            instantiated_classes.append(callee)
     return count, instantiated_classes
 
 

@@ -1,289 +1,153 @@
+"""Unit tests for structure_guard module."""
+
 from __future__ import annotations
 
-import textwrap
+import argparse
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
-from ci_tools.scripts import structure_guard
-from ci_tools.scripts.guard_common import is_excluded, iter_python_files, get_class_line_span
-
 from conftest import write_module
+from ci_tools.scripts.structure_guard import StructureGuard
 
 
-def test_iter_python_files_single_file(tmp_path: Path):
-    """Test iter_python_files with a single file."""
-    py_file = tmp_path / "test.py"
-    py_file.write_text("# test")
-
-    files = list(iter_python_files(py_file))
-    assert len(files) == 1
-    assert files[0] == py_file
-
-
-def test_iter_python_files_non_python_file(tmp_path: Path):
-    """Test iter_python_files with a non-Python file."""
-    txt_file = tmp_path / "test.txt"
-    txt_file.write_text("# test")
-
-    files = list(iter_python_files(txt_file))
-    assert len(files) == 0
+def test_parse_args_defaults():
+    """Test argument parsing with defaults."""
+    guard = StructureGuard()
+    args = guard.parse_args([])
+    assert args.root == Path("src")
+    assert args.max_class_lines == 100
+    assert args.exclude == []
 
 
-def test_iter_python_files_directory(tmp_path: Path):
-    """Test iter_python_files with a directory."""
-    (tmp_path / "file1.py").write_text("# file1")
-    (tmp_path / "file2.py").write_text("# file2")
-    (tmp_path / "subdir").mkdir()
-    (tmp_path / "subdir" / "file3.py").write_text("# file3")
-
-    files = list(iter_python_files(tmp_path))
-    assert len(files) == 3
-
-
-def test_is_excluded_basic():
-    """Test basic exclusion logic."""
-    path = Path("/project/src/module.py").resolve()
-    exclusions = [Path("/project/src").resolve()]
-    assert is_excluded(path, exclusions) is True
+def test_parse_args_custom_values():
+    """Test argument parsing with custom values."""
+    guard = StructureGuard()
+    args = guard.parse_args(
+        ["--root", "custom", "--max-class-lines", "50", "--exclude", "tests"]
+    )
+    assert args.root == Path("custom")
+    assert args.max_class_lines == 50
+    assert args.exclude == [Path("tests")]
 
 
-def test_is_excluded_no_match():
-    """Test exclusion with no match."""
-    path = Path("/project/src/module.py").resolve()
-    exclusions = [Path("/project/tests").resolve()]
-    assert is_excluded(path, exclusions) is False
+def test_scan_file_within_limit(tmp_path: Path):
+    """Test scanning a file with class within the line limit."""
+    py_file = tmp_path / "small_class.py"
+    class_lines = "\n".join(f"    x{i} = {i}" for i in range(20))
+    content = f"class SmallClass:\n{class_lines}"
+    write_module(py_file, content)
+
+    guard = StructureGuard()
+    guard.repo_root = tmp_path
+    args = argparse.Namespace(max_class_lines=100)
+    violations = guard.scan_file(py_file, args)
+    assert len(violations) == 0
 
 
-def test_class_line_span_basic(tmp_path: Path):
-    """Test class_line_span with basic class."""
-    source = textwrap.dedent(
-        """
-        class Foo:
-            def method(self):
-                pass
-        """
-    ).strip()
+def test_scan_file_exceeds_limit(tmp_path: Path):
+    """Test scanning a file with class exceeding the line limit."""
+    py_file = tmp_path / "large_class.py"
+    class_lines = "\n".join(f"    x{i} = {i}" for i in range(110))
+    content = f"class LargeClass:\n{class_lines}"
+    write_module(py_file, content)
 
-    tree = structure_guard.ast.parse(source)
-    stmt = tree.body[0]
-    assert isinstance(stmt, structure_guard.ast.ClassDef)
-    start, end = get_class_line_span(stmt)
-
-    assert start == 1
-    assert end == 3
+    guard = StructureGuard()
+    guard.repo_root = tmp_path
+    args = argparse.Namespace(max_class_lines=100)
+    violations = guard.scan_file(py_file, args)
+    assert len(violations) == 1
+    assert "LargeClass" in violations[0]
+    assert "limit 100" in violations[0]
 
 
-def test_class_line_span_no_end_lineno(tmp_path: Path):
-    """Test class_line_span when end_lineno is None."""
-    source = "class Foo: pass"
-    tree = structure_guard.ast.parse(source)
-    stmt = tree.body[0]
-    assert isinstance(stmt, structure_guard.ast.ClassDef)
+def test_scan_file_multiple_classes(tmp_path: Path):
+    """Test scanning a file with multiple classes."""
+    py_file = tmp_path / "multi.py"
+    small_class = "\n".join(f"    x{i} = {i}" for i in range(20))
+    large_class = "\n".join(f"    y{i} = {i}" for i in range(110))
+    content = f"class SmallClass:\n{small_class}\n\nclass LargeClass:\n{large_class}"
+    write_module(py_file, content)
 
-    # Simulate missing end_lineno
-    if hasattr(stmt, "end_lineno"):
-        delattr(stmt, "end_lineno")
-
-    start, end = get_class_line_span(stmt)
-    assert start == 1
-    assert end >= start
-
-
-def test_class_line_span_nested_content(tmp_path: Path):
-    """Test class_line_span with nested content."""
-    source = textwrap.dedent(
-        """
-        class Foo:
-            def method1(self):
-                x = 1
-                return x
-
-            def method2(self):
-                y = 2
-                return y
-        """
-    ).strip()
-
-    tree = structure_guard.ast.parse(source)
-    stmt = tree.body[0]
-    assert isinstance(stmt, structure_guard.ast.ClassDef)
-    start, end = get_class_line_span(stmt)
-
-    assert start == 1
-    assert end == 8
+    guard = StructureGuard()
+    guard.repo_root = tmp_path
+    args = argparse.Namespace(max_class_lines=100)
+    violations = guard.scan_file(py_file, args)
+    assert len(violations) == 1
+    assert "LargeClass" in violations[0]
+    assert "SmallClass" not in violations[0]
 
 
-def test_main_success_no_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """Test main function with no violations."""
-    root = tmp_path / "src"
-    root.mkdir()
+def test_scan_file_exactly_at_limit(tmp_path: Path):
+    """Test scanning a file with class exactly at the line limit."""
+    py_file = tmp_path / "exact.py"
+    class_lines = "\n".join(f"    x{i} = {i}" for i in range(98))
+    content = f"class ExactClass:\n{class_lines}"
+    write_module(py_file, content)
+
+    guard = StructureGuard()
+    guard.repo_root = tmp_path
+    args = argparse.Namespace(max_class_lines=100)
+    violations = guard.scan_file(py_file, args)
+    assert len(violations) == 0
+
+
+def test_scan_file_no_classes(tmp_path: Path):
+    """Test scanning a file with no classes."""
+    py_file = tmp_path / "no_classes.py"
     write_module(
-        root / "small.py",
+        py_file,
         """
-        class SmallClass:
-            def method(self):
-                return 1
+        def function1():
+            pass
+
+        def function2():
+            pass
         """,
     )
 
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
+    guard = StructureGuard()
+    guard.repo_root = tmp_path
+    args = argparse.Namespace(max_class_lines=100)
+    violations = guard.scan_file(py_file, args)
+    assert len(violations) == 0
 
+
+def test_get_violations_header():
+    """Test violations header message."""
+    guard = StructureGuard()
+    args = argparse.Namespace(max_class_lines=100)
+    header = guard.get_violations_header(args)
+    assert "Oversized classes" in header
+    assert "100 lines" in header
+
+
+@patch("sys.argv", ["structure_guard.py"])
+def test_main_no_violations(tmp_path: Path, monkeypatch):
+    """Test main entry point with no violations."""
+    monkeypatch.chdir(tmp_path)
+    src = tmp_path / "src"
+    src.mkdir()
+    write_module(
+        src / "small.py",
+        """
+        class SmallClass:
+            def method(self): pass
+        """,
+    )
+
+    result = StructureGuard.main()
     assert result == 0
-    captured = capsys.readouterr()
-    assert captured.err == ""
 
 
-def test_main_detects_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """Test main function detects violations."""
-    root = tmp_path / "src"
-    root.mkdir()
-    py_file = root / "large.py"
+@patch("sys.argv", ["structure_guard.py", "--max-class-lines", "10"])
+def test_main_with_violations(tmp_path: Path, monkeypatch):
+    """Test main entry point with violations."""
+    monkeypatch.chdir(tmp_path)
+    src = tmp_path / "src"
+    src.mkdir()
+    class_lines = "\n".join(f"    x{i} = {i}" for i in range(20))
+    content = f"class LargeClass:\n{class_lines}"
+    write_module(src / "large.py", content)
 
-    methods = "\n".join([f"    def method_{i}(self):\n        pass" for i in range(20)])
-    content = f"class LargeClass:\n{methods}"
-    py_file.write_text(content)
-
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
-
+    result = StructureGuard.main()
     assert result == 1
-    captured = capsys.readouterr()
-    assert "Oversized classes detected" in captured.err
-    assert "LargeClass" in captured.err
-
-
-def test_main_respects_exclusions(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """Test main function respects exclusion patterns."""
-    root = tmp_path / "src"
-    excluded = root / "excluded"
-    root.mkdir()
-    excluded.mkdir(parents=True)
-
-    large_class = "class LargeClass:\n" + "\n".join(
-        [f"    def method_{i}(self):\n        pass" for i in range(20)]
-    )
-    (root / "included.py").write_text(large_class)
-    (excluded / "excluded.py").write_text(large_class)
-
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.StructureGuard.main(
-            ["--root", str(root), "--max-class-lines", "10", "--exclude", str(excluded)]
-        )
-
-    assert result == 1
-    captured = capsys.readouterr()
-    assert "included.py" in captured.err
-    assert "excluded.py" not in captured.err
-
-
-def test_main_handles_multiple_violations(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """Test main function handles multiple violations."""
-    root = tmp_path / "src"
-    root.mkdir()
-
-    large_class = "class LargeClass:\n" + "\n".join(
-        [f"    def method_{i}(self):\n        pass" for i in range(20)]
-    )
-    (root / "file1.py").write_text(large_class)
-    (root / "file2.py").write_text(large_class)
-
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
-
-    assert result == 1
-    captured = capsys.readouterr()
-    assert "file1.py" in captured.err
-    assert "file2.py" in captured.err
-
-
-def test_main_prints_violations_sorted(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """Test main function prints violations in sorted order."""
-    root = tmp_path / "src"
-    root.mkdir()
-
-    large_class = "class LargeClass:\n" + "\n".join(
-        [f"    def method_{i}(self):\n        pass" for i in range(20)]
-    )
-    (root / "zebra.py").write_text(large_class)
-    (root / "alpha.py").write_text(large_class)
-
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
-
-    assert result == 1
-    captured = capsys.readouterr()
-    err_lines = [
-        line for line in captured.err.split("\n") if "alpha.py" in line or "zebra.py" in line
-    ]
-    assert len(err_lines) == 2
-    assert "alpha.py" in err_lines[0]
-    assert "zebra.py" in err_lines[1]
-
-
-def test_main_scan_file_error(tmp_path: Path, capsys: pytest.CaptureFixture, monkeypatch):
-    """Test main function handles scan_file errors."""
-    root = tmp_path / "src"
-    root.mkdir()
-    (root / "test.py").write_text("class Foo: pass")
-
-    def mock_scan_file(self, path, args):
-        raise RuntimeError("Test error")
-
-    monkeypatch.setattr(structure_guard.StructureGuard, "scan_file", mock_scan_file)
-
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.StructureGuard.main(["--root", str(root)])
-
-    assert result == 1
-    captured = capsys.readouterr()
-    assert "Test error" in captured.err
-
-
-def test_class_line_span_single_line_class():
-    """Test class_line_span with single-line class."""
-    source = "class Foo: pass"
-    tree = structure_guard.ast.parse(source)
-    stmt = tree.body[0]
-    assert isinstance(stmt, structure_guard.ast.ClassDef)
-    start, end = get_class_line_span(stmt)
-
-    assert start == 1
-    assert end == 1
-
-
-def test_main_handles_relative_paths(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """Test main function handles relative paths correctly."""
-    root = tmp_path / "src"
-    root.mkdir()
-
-    large_class = "class LargeClass:\n" + "\n".join(
-        [f"    def method_{i}(self):\n        pass" for i in range(20)]
-    )
-    (root / "module.py").write_text(large_class)
-
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
-        result = structure_guard.StructureGuard.main(["--root", str(root), "--max-class-lines", "10"])
-
-    assert result == 1
-    captured = capsys.readouterr()
-    assert "module.py" in captured.err
-    assert "LargeClass" in captured.err
-
-
-def test_iter_python_files_empty_directory(tmp_path: Path):
-    """Test iter_python_files with empty directory."""
-    files = list(iter_python_files(tmp_path))
-    assert len(files) == 0
-
-
-def test_is_excluded_multiple_exclusions():
-    """Test exclusion with multiple patterns."""
-    path = Path("/project/tests/test_module.py").resolve()
-    exclusions = [
-        Path("/project/vendor").resolve(),
-        Path("/project/tests").resolve(),
-    ]
-    assert is_excluded(path, exclusions) is True

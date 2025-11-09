@@ -34,7 +34,7 @@ class TestRequestCommitMessage:
         )
 
         assert summary == "Fixed authentication bug"
-        assert body_lines == []
+        assert not body_lines
         mock_invoke.assert_called_once()
 
     @patch("ci_tools.ci_runtime.messaging.invoke_codex")
@@ -359,9 +359,7 @@ class TestCommitAndPush:
         mock_run.side_effect = [
             Mock(returncode=0, stdout="", stderr=""),  # commit success
             Mock(returncode=0, stdout="main\n", stderr=""),  # branch name
-            subprocess.CalledProcessError(
-                1, ["git", "push"], output="", stderr="push failed"
-            ),
+            subprocess.CalledProcessError(1, ["git", "push"], output="", stderr="push failed"),
         ]
 
         with pytest.raises(GitCommandAbort) as exc_info:
@@ -455,6 +453,7 @@ class TestCommitAndPush:
         assert "Bullet point" in body_text
 
 
+# pylint: disable=too-few-public-methods
 class TestCommitMessageErrorFactory:
     """Tests for CommitMessageError factory methods."""
 

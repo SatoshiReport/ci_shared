@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _check_single_directory(
+def check_single_directory(
     base_dir: Path,
     readme_path: str | None,
     has_content_check: Callable[[Path], bool] | None,
@@ -43,12 +43,12 @@ def _check_single_directory(
     return [readme_path] if readme_path else []
 
 
-def _should_skip_directory(item: Path) -> bool:
+def should_skip_directory(item: Path) -> bool:
     """Check if a directory should be skipped during scanning."""
     return not item.is_dir() or item.name.startswith("_") or item.name == ".git"
 
 
-def _scan_subdirectories(
+def scan_subdirectories(
     base_dir: Path,
     path_prefix: str,
     has_content_check: Callable[[Path], bool] | None,
@@ -56,7 +56,7 @@ def _scan_subdirectories(
     """Scan subdirectories and collect README requirements."""
     required = []
     for item in base_dir.iterdir():
-        if _should_skip_directory(item):
+        if should_skip_directory(item):
             continue
         if has_content_check and not has_content_check(item):
             continue
@@ -65,7 +65,7 @@ def _scan_subdirectories(
     return required
 
 
-def _discover_readme_requirements(
+def discover_readme_requirements(
     base_dir: Path,
     readme_path: str | None = None,
     path_prefix: str | None = None,
@@ -88,10 +88,10 @@ def _discover_readme_requirements(
         return []
 
     if not scan_subdirs:
-        return _check_single_directory(base_dir, readme_path, has_content_check)
+        return check_single_directory(base_dir, readme_path, has_content_check)
 
     assert path_prefix is not None  # scan_subdirs requires path_prefix
-    return _scan_subdirectories(base_dir, path_prefix, has_content_check)
+    return scan_subdirectories(base_dir, path_prefix, has_content_check)
 
 
 def discover_src_modules(root: Path) -> List[str]:
@@ -99,7 +99,7 @@ def discover_src_modules(root: Path) -> List[str]:
 
     Returns paths like: src/collect_data/README.md, src/modeling/README.md
     """
-    return _discover_readme_requirements(
+    return discover_readme_requirements(
         root / "src",
         path_prefix="src",
         has_content_check=lambda d: len(list(d.rglob("*.py"))) > 0,
@@ -112,7 +112,7 @@ def discover_architecture_docs(root: Path) -> List[str]:
 
     If docs/architecture/ exists and has .md files, require docs/architecture/README.md
     """
-    return _discover_readme_requirements(
+    return discover_readme_requirements(
         root / "docs" / "architecture",
         readme_path="docs/architecture/README.md",
         has_content_check=lambda d: len(list(d.glob("*.md"))) > 0,
@@ -125,7 +125,7 @@ def discover_domain_docs(root: Path) -> List[str]:
 
     Each subdirectory in docs/domains/ needs a README.md
     """
-    return _discover_readme_requirements(
+    return discover_readme_requirements(
         root / "docs" / "domains",
         path_prefix="docs/domains",
         scan_subdirs=True,
@@ -137,7 +137,7 @@ def discover_operations_docs(root: Path) -> List[str]:
 
     If docs/operations/ exists, it needs a README.md
     """
-    return _discover_readme_requirements(
+    return discover_readme_requirements(
         root / "docs" / "operations",
         readme_path="docs/operations/README.md",
         scan_subdirs=False,
@@ -149,7 +149,7 @@ def discover_reference_docs(root: Path) -> List[str]:
 
     Each subdirectory in docs/reference/ needs a README.md
     """
-    return _discover_readme_requirements(
+    return discover_readme_requirements(
         root / "docs" / "reference",
         path_prefix="docs/reference",
         scan_subdirs=True,
@@ -237,9 +237,10 @@ CATEGORY_KEYS = [
 ]
 
 
-def _group_missing_docs(
+def group_missing_docs(
     missing: List[str], discovery_info: dict
 ) -> dict[str, List[str]]:
+    """Group missing documentation files by category."""
     grouped: dict[str, List[str]] = {label: [] for label, _ in CATEGORY_KEYS}
     for doc in missing:
         for label, key in CATEGORY_KEYS:
@@ -249,9 +250,10 @@ def _group_missing_docs(
     return grouped
 
 
-def _print_failure_report(
+def print_failure_report(
     grouped: dict[str, List[str]],
 ) -> None:
+    """Print detailed failure report for missing documentation."""
     print("Documentation Guard: FAILED", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
     print("❌ Missing required documentation:", file=sys.stderr)
@@ -284,7 +286,8 @@ def _print_failure_report(
     print("  • Reference: Every subdirectory in docs/reference/", file=sys.stderr)
 
 
-def _print_success(total_docs: int) -> None:
+def print_success(total_docs: int) -> None:
+    """Print success message for documentation guard."""
     print("✅ documentation_guard: All required documentation present", file=sys.stderr)
     print(f"   ({total_docs} docs verified)", file=sys.stderr)
 
@@ -305,11 +308,11 @@ def main() -> int:
     missing = check_required_docs(root, required_docs)
 
     if missing:
-        grouped = _group_missing_docs(missing, discovery_info)
-        _print_failure_report(grouped)
+        grouped = group_missing_docs(missing, discovery_info)
+        print_failure_report(grouped)
         return 1
 
-    _print_success(len(required_docs))
+    print_success(len(required_docs))
     return 0
 
 

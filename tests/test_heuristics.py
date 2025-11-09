@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from ci_tools.ci_runtime.config import REPO_ROOT
 from ci_tools.ci_runtime.heuristics import (
     detect_attribute_error,
     detect_missing_symbol_error,
@@ -51,17 +54,16 @@ class TestDetectAttributeError:
 
     def test_attribute_error_with_repo_file(self):
         """Test AttributeError detection with file from repository."""
-        from ci_tools.ci_runtime.config import REPO_ROOT
 
         # Create a log with a file that is in the repo
         test_file = REPO_ROOT / "ci_tools" / "ci_runtime" / "models.py"
 
-        log = f'''
+        log = f"""
         Traceback (most recent call last):
           File "{test_file}", line 10, in test_function
             obj.missing_attribute()
         AttributeError: 'MyClass' object has no attribute 'missing_attribute'
-        '''
+        """
         result = detect_attribute_error(log)
         # Should successfully detect the error with a repo file
         assert result is not None
@@ -98,15 +100,14 @@ class TestDetectAttributeError:
 
     def test_attribute_error_with_oserror(self, monkeypatch):
         """Test AttributeError handling when resolve() raises OSError."""
-        from pathlib import Path
 
         # Create a log with a file path that will trigger OSError
-        log = '''
+        log = """
         Traceback (most recent call last):
           File "/invalid/path/that/does/not/exist.py", line 10, in test_function
             obj.missing_method()
         AttributeError: 'MyClass' object has no attribute 'missing_method'
-        '''
+        """
 
         # Mock Path.resolve to raise OSError
         original_resolve = Path.resolve
@@ -125,12 +126,12 @@ class TestDetectAttributeError:
     def test_attribute_error_outside_repo(self):
         """Test AttributeError with file outside repository."""
         # Using a path that's definitely not in the repo
-        log = '''
+        log = """
         Traceback (most recent call last):
           File "/usr/lib/python3.12/site-packages/test.py", line 10, in test_function
             obj.bad_attr()
         AttributeError: 'dict' object has no attribute 'bad_attr'
-        '''
+        """
         result = detect_attribute_error(log)
         # Should return None for files outside the repo
         assert result is None
@@ -161,7 +162,7 @@ class TestSummarizeFailure:
         /Users/john/project/src/module.py:42: error: Type mismatch
         /Users/john/project/src/module.py:50: error: Another error
         """
-        summary, files = summarize_failure(log)
+        _summary, files = summarize_failure(log)
         assert len(files) == 1
         # The file path is extracted as everything after /Users/[^:]+/
         assert any("module.py" in f for f in files)
@@ -182,13 +183,13 @@ class TestSummarizeFailure:
         log = "All tests passed successfully"
         summary, files = summarize_failure(log)
         assert summary == ""
-        assert files == []
+        assert not files
 
     def test_empty_log(self):
         """Test empty log returns empty results."""
         summary, files = summarize_failure("")
         assert summary == ""
-        assert files == []
+        assert not files
 
     def test_mixed_content(self):
         """Test log with mixed content."""
@@ -198,7 +199,7 @@ class TestSummarizeFailure:
         Some other output
         /Users/jane/myrepo/src/core.py:99: error message
         """
-        summary, files = summarize_failure(log)
+        _summary, files = summarize_failure(log)
         if files:  # If pattern matches
             # Files contain paths after /Users/jane/myrepo/
             assert any("test_foo.py" in f for f in files) or any("core.py" in f for f in files)
