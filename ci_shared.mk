@@ -104,19 +104,12 @@ shared-checks:
 		if [ -z "$$SCAN_TARGETS" ]; then \
 			SCAN_TARGETS="."; \
 		fi; \
-		STATUS=0; \
 		for TARGET in $$SCAN_TARGETS; do \
 			if [ -e "$$TARGET" ]; then \
 				echo "  → scanning $$TARGET"; \
-				if ! gitleaks detect $$CONFIG_FLAG --no-git --source "$$TARGET" --verbose --exit-code 1; then \
-					STATUS=$$?; \
-					break; \
-				fi; \
+				gitleaks detect $$CONFIG_FLAG --no-git --source "$$TARGET" --verbose || exit 1; \
 			fi; \
 		done; \
-		if [ $$STATUS -ne 0 ]; then \
-			exit $$STATUS; \
-		fi; \
 	else \
 		echo "⚠️  gitleaks not installed - skipping secret scan"; \
 		echo "   Install: brew install gitleaks (macOS) or see https://github.com/gitleaks/gitleaks#installing"; \
