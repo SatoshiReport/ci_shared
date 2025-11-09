@@ -62,8 +62,9 @@ def test_count_methods_basic():
     ).strip()
 
     tree = method_count_guard.ast.parse(source)
-    class_node = tree.body[0]
-    public_count, total_count = count_class_methods(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, method_count_guard.ast.ClassDef)
+    public_count, total_count = count_class_methods(stmt)
 
     assert public_count == 2  # method1, method2
     assert total_count == 3  # method1, method2, _private_method
@@ -86,8 +87,9 @@ def test_count_methods_excludes_dunder():
     ).strip()
 
     tree = method_count_guard.ast.parse(source)
-    class_node = tree.body[0]
-    public_count, total_count = count_class_methods(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, method_count_guard.ast.ClassDef)
+    public_count, total_count = count_class_methods(stmt)
 
     assert public_count == 1  # Only method
     assert total_count == 1
@@ -108,8 +110,9 @@ def test_count_methods_excludes_properties():
     ).strip()
 
     tree = method_count_guard.ast.parse(source)
-    class_node = tree.body[0]
-    public_count, total_count = count_class_methods(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, method_count_guard.ast.ClassDef)
+    public_count, total_count = count_class_methods(stmt)
 
     assert public_count == 1  # Only method
     assert total_count == 1
@@ -132,8 +135,9 @@ def test_count_methods_private_methods():
     ).strip()
 
     tree = method_count_guard.ast.parse(source)
-    class_node = tree.body[0]
-    public_count, total_count = count_class_methods(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, method_count_guard.ast.ClassDef)
+    public_count, total_count = count_class_methods(stmt)
 
     assert public_count == 1  # Only public_method
     assert total_count == 2  # public_method, _private_method (not __private_name_mangled)
@@ -150,8 +154,9 @@ def test_count_methods_no_methods():
     ).strip()
 
     tree = method_count_guard.ast.parse(source)
-    class_node = tree.body[0]
-    public_count, total_count = count_class_methods(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, method_count_guard.ast.ClassDef)
+    public_count, total_count = count_class_methods(stmt)
 
     assert public_count == 0
     assert total_count == 0
@@ -308,8 +313,9 @@ def test_count_methods_mixed_decorators():
     ).strip()
 
     tree = method_count_guard.ast.parse(source)
-    class_node = tree.body[0]
-    public_count, total_count = count_class_methods(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, method_count_guard.ast.ClassDef)
+    public_count, total_count = count_class_methods(stmt)
 
     # Should count static, cls, and regular, but not prop1
     assert total_count == 3
@@ -352,8 +358,9 @@ def test_count_methods_only_dunder():
     ).strip()
 
     tree = method_count_guard.ast.parse(source)
-    class_node = tree.body[0]
-    public_count, total_count = count_class_methods(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, method_count_guard.ast.ClassDef)
+    public_count, total_count = count_class_methods(stmt)
 
     assert public_count == 0
     assert total_count == 0

@@ -362,4 +362,5 @@ class TestFailureContext:
             coverage_report=report,
         )
         assert context.coverage_report == report
+        assert context.coverage_report is not None
         assert context.coverage_report.threshold == 80.0

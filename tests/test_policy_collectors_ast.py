@@ -30,64 +30,72 @@ def test_contains_literal_dataset_constant():
     """Test contains_literal_dataset with simple constant."""
     source = "42"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert contains_literal_dataset(node) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert contains_literal_dataset(stmt.value) is True
 
 
 def test_contains_literal_dataset_string():
     """Test contains_literal_dataset with string."""
     source = "'hello'"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert contains_literal_dataset(node) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert contains_literal_dataset(stmt.value) is True
 
 
 def test_contains_literal_dataset_list():
     """Test contains_literal_dataset with list."""
     source = "[1, 2, 3]"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert contains_literal_dataset(node) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert contains_literal_dataset(stmt.value) is True
 
 
 def test_contains_literal_dataset_tuple():
     """Test contains_literal_dataset with tuple."""
     source = "(1, 2, 3)"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert contains_literal_dataset(node) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert contains_literal_dataset(stmt.value) is True
 
 
 def test_contains_literal_dataset_set():
     """Test contains_literal_dataset with set."""
     source = "{1, 2, 3}"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert contains_literal_dataset(node) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert contains_literal_dataset(stmt.value) is True
 
 
 def test_contains_literal_dataset_dict():
     """Test contains_literal_dataset with dict."""
     source = "{'a': 1, 'b': 2}"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert contains_literal_dataset(node) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert contains_literal_dataset(stmt.value) is True
 
 
 def test_contains_literal_dataset_nested():
     """Test contains_literal_dataset with nested structures."""
     source = "{'key': [1, 2, {'nested': 3}]}"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert contains_literal_dataset(node) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert contains_literal_dataset(stmt.value) is True
 
 
 def test_contains_literal_dataset_false():
     """Test contains_literal_dataset returns false for non-literals."""
     source = "x + 1"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert contains_literal_dataset(node) is False
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert contains_literal_dataset(stmt.value) is False
 
 
 def test_collect_long_functions(tmp_path, monkeypatch):

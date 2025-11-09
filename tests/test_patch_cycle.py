@@ -200,6 +200,7 @@ class TestApplyPatchCandidate:
         result = _apply_patch_candidate(diff_text, state=state)
 
         assert result is False
+        assert state.last_error is not None
         assert "fatal error" in state.last_error
 
     @patch("ci_tools.ci_runtime.patch_cycle.apply_patch")
@@ -212,6 +213,7 @@ class TestApplyPatchCandidate:
         result = _apply_patch_candidate(diff_text, state=state)
 
         assert result is False
+        assert state.last_error is not None
         assert "unexpected error" in state.last_error
 
     @patch("ci_tools.ci_runtime.patch_cycle.apply_patch")

@@ -95,6 +95,7 @@ class TestPatchLooksRisky:
         """Test empty patch content is flagged as risky."""
         risky, reason = patch_looks_risky("", max_lines=100)
         assert risky is True
+        assert reason is not None
         assert "empty" in reason.lower()
 
     def test_large_patch_exceeds_limit(self):
@@ -102,6 +103,7 @@ class TestPatchLooksRisky:
         large_patch = "\n".join(["+new line" for _ in range(150)])
         risky, reason = patch_looks_risky(large_patch, max_lines=100)
         assert risky is True
+        assert reason is not None
         assert "150" in reason
         assert "100" in reason
 
@@ -119,6 +121,7 @@ class TestPatchLooksRisky:
         ):
             risky, reason = patch_looks_risky(patch_text, max_lines=1000)
             assert risky is True
+            assert reason is not None
             assert "protected path" in reason.lower()
             assert "ci.py" in reason
 
@@ -135,6 +138,7 @@ class TestPatchLooksRisky:
             mock_risky.return_value = "rm -rf"
             risky, reason = patch_looks_risky(patch_text, max_lines=1000)
             assert risky is True
+            assert reason is not None
             assert "risky pattern" in reason.lower()
 
     def test_safe_patch_passes_checks(self):
@@ -166,6 +170,7 @@ diff --git a/Makefile b/Makefile
         ):
             risky, reason = patch_looks_risky(patch_text, max_lines=1000)
             assert risky is True
+            assert reason is not None
             assert "ci.py" in reason
             assert "Makefile" in reason
 

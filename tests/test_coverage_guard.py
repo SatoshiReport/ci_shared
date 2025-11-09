@@ -97,7 +97,7 @@ class TestCoverageResult:
         )
 
         with pytest.raises(Exception):  # FrozenInstanceError
-            result.statements = 50
+            result.statements = 50  # type: ignore[misc]
 
 
 class TestParseArgs:

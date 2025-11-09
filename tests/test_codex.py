@@ -309,7 +309,6 @@ class TestExtractUnifiedDiff:
     def test_returns_none_for_empty_response(self):
         """Test that empty response returns None."""
         assert extract_unified_diff("") is None
-        assert extract_unified_diff(None) is None
 
     def test_returns_none_for_noop(self):
         """Test that NOOP response returns None."""
@@ -362,6 +361,7 @@ Some text
 ```
 """
         result = extract_unified_diff(response)
+        assert result is not None
         assert "--- a/file.py" in result
 
     def test_extracts_diff_starting_with_index(self):
@@ -375,6 +375,7 @@ Index: file.py
 ```
 """
         result = extract_unified_diff(response)
+        assert result is not None
         assert result.startswith("Index:")
 
     def test_returns_first_code_block_if_no_diff_markers(self):
@@ -386,6 +387,7 @@ without diff markers
 ```
 """
         result = extract_unified_diff(response)
+        assert result is not None
         assert "some code" in result
 
     def test_returns_response_text_if_no_code_blocks(self):
@@ -467,8 +469,8 @@ class TestRequestCodexPatch:
         assert "previous error" in prompt_text
 
     @patch("ci_tools.ci_runtime.codex.invoke_codex")
-    def test_handles_none_git_status(self, mock_invoke):
-        """Test handling of None git_status."""
+    def test_handles_empty_git_status(self, mock_invoke):
+        """Test handling of empty git_status."""
         mock_invoke.return_value = "diff response"
 
         failure_context = FailureContext(
@@ -482,7 +484,7 @@ class TestRequestCodexPatch:
             command="test",
             failure_context=failure_context,
             git_diff="",
-            git_status=None,
+            git_status="",
             iteration=1,
             patch_error=None,
             attempt=1,
@@ -548,6 +550,7 @@ class TestTruncateDiffSummary:
         diff = "\n".join(["+line" for _ in range(100)])
         exceeded, message = truncate_diff_summary(diff, line_limit=50)
         assert exceeded is True
+        assert message is not None
         assert "100" in message
         assert "50" in message
 

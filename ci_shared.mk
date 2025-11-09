@@ -15,30 +15,61 @@ CI_TOOLS_CONFIG_PATH := $(shell \
 )
 GITLEAKS_CONFIG_PATH := $(shell if [ -f ".gitleaks.toml" ]; then echo ".gitleaks.toml"; elif [ -f "ci_shared/.gitleaks.toml" ]; then echo "ci_shared/.gitleaks.toml"; else echo ""; fi)
 
-# Shared variables (can be overridden in individual Makefiles)
-FORMAT_TARGETS ?= src tests
+# ============================================================================
+# STRICT CI STANDARDS - NO OVERRIDES ALLOWED
+# ============================================================================
+# These values enforce industry best practices and CANNOT be overridden
+# by consuming repositories. If your code doesn't meet these standards,
+# FIX THE CODE, don't weaken the standards.
+
+# Code Quality Thresholds (MANDATORY - cannot be overridden)
+SHARED_PYTEST_THRESHOLD := 80
+COVERAGE_GUARD_THRESHOLD := 80
+ENABLE_PYLINT := 1
+COMPLEXITY_MAX_CYCLOMATIC := 10
+COMPLEXITY_MAX_COGNITIVE := 15
+MODULE_MAX_LINES := 400
+FUNCTION_MAX_LINES := 80
+METHOD_MAX_PUBLIC := 15
+METHOD_MAX_TOTAL := 25
+INHERITANCE_MAX_DEPTH := 2
+DEPENDENCY_MAX_INSTANTIATIONS := 5
+
+# ============================================================================
+# REPOSITORY STRUCTURE (can be overridden for flat layouts)
+# ============================================================================
 SHARED_SOURCE_ROOT ?= src
 SHARED_TEST_ROOT ?= tests
 SHARED_DOC_ROOT ?= .
+
+# ============================================================================
+# CHECK TARGETS - ALL CODE MUST PASS (source + tests)
+# ============================================================================
+FORMAT_TARGETS ?= $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT)
+SHARED_PYRIGHT_TARGETS := $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT)
+SHARED_PYLINT_TARGETS := $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT)
+SHARED_PYTEST_TARGET := $(SHARED_TEST_ROOT)
+SHARED_PYTEST_COV_TARGET := $(SHARED_SOURCE_ROOT)
+
+# ============================================================================
+# GUARD ARGUMENTS (strict standards applied - uses constants above)
+# ============================================================================
+COMPLEXITY_GUARD_ARGS := --root $(SHARED_SOURCE_ROOT) --max-cyclomatic $(COMPLEXITY_MAX_CYCLOMATIC) --max-cognitive $(COMPLEXITY_MAX_COGNITIVE)
+MODULE_GUARD_ARGS := --root $(SHARED_SOURCE_ROOT) --max-module-lines $(MODULE_MAX_LINES)
+FUNCTION_GUARD_ARGS := --root $(SHARED_SOURCE_ROOT) --max-function-lines $(FUNCTION_MAX_LINES)
+METHOD_COUNT_GUARD_ARGS := --root $(SHARED_SOURCE_ROOT) --max-public-methods $(METHOD_MAX_PUBLIC) --max-total-methods $(METHOD_MAX_TOTAL)
+UNUSED_MODULE_GUARD_ARGS := --root $(SHARED_SOURCE_ROOT) --exclude tests conftest.py __init__.py
+
+# ============================================================================
+# ALLOWED OVERRIDES (minimal - only for special cases)
+# ============================================================================
 SHARED_CODESPELL_IGNORE ?= $(if $(CI_TOOLS_CONFIG_PATH),$(CI_TOOLS_CONFIG_PATH)/codespell_ignore_words.txt)
-SHARED_PYRIGHT_TARGETS ?= $(SHARED_SOURCE_ROOT)
-SHARED_PYLINT_TARGETS ?= $(SHARED_SOURCE_ROOT)
-SHARED_PYTEST_TARGET ?= $(SHARED_TEST_ROOT)
-SHARED_PYTEST_COV_TARGET ?= $(SHARED_SOURCE_ROOT)
-SHARED_PYTEST_THRESHOLD ?= 80
-COVERAGE_GUARD_THRESHOLD ?= $(SHARED_PYTEST_THRESHOLD)
 SHARED_PYTEST_EXTRA ?=
-COMPLEXITY_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-cyclomatic 10 --max-cognitive 15
-MODULE_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-module-lines 400
-FUNCTION_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-function-lines 80
-METHOD_COUNT_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT) --max-public-methods 15 --max-total-methods 25
-UNUSED_MODULE_GUARD_ARGS ?= --root $(SHARED_SOURCE_ROOT)
-ENABLE_PYLINT ?= 1
 PYLINT_ARGS ?=
 BANDIT_BASELINE ?=
-BANDIT_EXCLUDE ?= artifacts,trash,models,logs
-GITLEAKS_SOURCE_DIRS ?= $(strip $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT) $(FORMAT_TARGETS) scripts docs ci_tools ci_tools_proxy ci_shared.mk shared-tool-config.toml pyproject.toml Makefile README.md SECURITY.md)
-SHARED_CLEANUP_ROOTS ?= $(strip $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT) $(FORMAT_TARGETS) scripts docs ci_tools ci_tools_proxy)
+BANDIT_EXCLUDE ?= artifacts,trash,models,logs,htmlcov
+GITLEAKS_SOURCE_DIRS ?= $(strip $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT) scripts docs ci_tools ci_tools_proxy ci_shared.mk shared-tool-config.toml pyproject.toml Makefile README.md SECURITY.md)
+SHARED_CLEANUP_ROOTS ?= $(strip $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT) scripts docs ci_tools ci_tools_proxy)
 
 PYTEST_NODES ?= 7
 PYTHON ?= python
@@ -106,16 +137,14 @@ shared-checks:
 	$(PYTHON) -m ci_tools.scripts.complexity_guard $(COMPLEXITY_GUARD_ARGS)
 	$(PYTHON) -m ci_tools.scripts.module_guard $(MODULE_GUARD_ARGS)
 	$(PYTHON) -m ci_tools.scripts.function_size_guard $(FUNCTION_GUARD_ARGS)
-	$(PYTHON) -m ci_tools.scripts.inheritance_guard --root $(SHARED_SOURCE_ROOT) --max-depth 2
+	$(PYTHON) -m ci_tools.scripts.inheritance_guard --root $(SHARED_SOURCE_ROOT) --max-depth $(INHERITANCE_MAX_DEPTH)
 	$(PYTHON) -m ci_tools.scripts.method_count_guard $(METHOD_COUNT_GUARD_ARGS)
-	$(PYTHON) -m ci_tools.scripts.dependency_guard --root $(SHARED_SOURCE_ROOT) --max-instantiations 5
+	$(PYTHON) -m ci_tools.scripts.dependency_guard --root $(SHARED_SOURCE_ROOT) --max-instantiations $(DEPENDENCY_MAX_INSTANTIATIONS)
 	$(PYTHON) -m ci_tools.scripts.unused_module_guard $(UNUSED_MODULE_GUARD_ARGS) --strict
 	$(PYTHON) -m ci_tools.scripts.documentation_guard --root $(SHARED_DOC_ROOT)
 	ruff check --target-version=py310 --fix $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT)
 	pyright --warnings $(SHARED_PYRIGHT_TARGETS)
-	@if [ "$(ENABLE_PYLINT)" = "1" ]; then \
-		pylint -j $(PYTEST_NODES) $(PYLINT_ARGS) $(SHARED_PYLINT_TARGETS); \
-	fi
+	pylint -j $(PYTEST_NODES) $(PYLINT_ARGS) $(SHARED_PYLINT_TARGETS)
 	@for DIR in $(SHARED_CLEANUP_ROOTS); do \
 		if [ -d "$$DIR" ]; then \
 			find "$$DIR" -name "*.pyc" -delete 2>/dev/null || true; \
@@ -127,8 +156,6 @@ shared-checks:
 		fi; \
 	done
 	pytest -n $(PYTEST_NODES) $(SHARED_PYTEST_TARGET) --cov=$(SHARED_PYTEST_COV_TARGET) --cov-fail-under=$(SHARED_PYTEST_THRESHOLD) -W error $(SHARED_PYTEST_EXTRA)
-	@if [ "$(COVERAGE_GUARD_THRESHOLD)" != "0" ]; then \
-		$(PYTHON) -m ci_tools.scripts.coverage_guard --threshold $(COVERAGE_GUARD_THRESHOLD) --data-file "$(CURDIR)/.coverage"; \
-	fi
+	$(PYTHON) -m ci_tools.scripts.coverage_guard --threshold $(COVERAGE_GUARD_THRESHOLD) --data-file "$(CURDIR)/.coverage"
 	$(PYTHON) -m compileall $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT)
 	@echo "✅ All shared CI checks passed!"

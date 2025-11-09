@@ -63,7 +63,7 @@ def run_main(monkeypatch: pytest.MonkeyPatch, args: list[str]) -> int:
     monkeypatch.setattr(sys, "argv", ["complexity_guard.py", *args])
     with pytest.raises(SystemExit) as exc:
         complexity_guard.main()
-    return int(exc.value.code)
+    return int(exc.value.code) if exc.value.code is not None else 0
 
 
 def test_main_rejects_missing_root(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:

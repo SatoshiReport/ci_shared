@@ -15,6 +15,18 @@ from pathlib import Path
 from types import ModuleType
 
 
+class SharedPackageMissingError(ImportError):
+    """Raised when shared ci_tools package __init__.py is missing."""
+
+
+class SharedDirectoryNotFoundError(ImportError):
+    """Raised when shared ci_tools directory does not exist."""
+
+
+class ImportSpecCreationError(ImportError):
+    """Raised when unable to create import spec for shared package."""
+
+
 def _resolve_shared_root() -> Path:
     """Return the path to the shared ci_shared checkout."""
     env_override = os.environ.get("CI_SHARED_ROOT")
@@ -27,14 +39,16 @@ def _load_shared_package(shared_ci_tools: Path) -> ModuleType:
     """Load ci_tools from the canonical shared checkout."""
     shared_init = shared_ci_tools / "__init__.py"
     if not shared_init.exists():
-        raise ImportError(
+        msg = (
             f"Shared ci_tools package missing at {shared_init}. "
             "Clone ci_shared and/or set CI_SHARED_ROOT."
         )
+        raise SharedPackageMissingError(msg)
 
     spec = importlib.util.spec_from_file_location("ci_tools", shared_init)
     if spec is None or spec.loader is None:
-        raise ImportError(f"Unable to create import spec for {shared_init}")
+        msg = f"Unable to create import spec for {shared_init}"
+        raise ImportSpecCreationError(msg)
 
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -47,10 +61,11 @@ def _bootstrap_shared_ci_tools() -> None:
     shared_root = _resolve_shared_root()
     shared_ci_tools = shared_root / "ci_tools"
     if not shared_ci_tools.exists():
-        raise ImportError(
+        msg = (
             f"Shared ci_tools directory not found at {shared_ci_tools}. "
             "Ensure ci_shared is cloned locally or set CI_SHARED_ROOT."
         )
+        raise SharedDirectoryNotFoundError(msg)
 
     shared_path = shared_ci_tools.as_posix()
     if shared_path not in sys.path:

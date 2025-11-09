@@ -32,6 +32,39 @@
 - Repository context for automation agents belongs in `ci_shared.config.json`; avoid duplicating secrets or protected paths elsewhere.
 - When adding new guard scripts, document usage in `docs/guard-suite.md` and expose knobs via `shared-tool-config.toml` so consuming repos inherit them automatically.
 
+## CI Pipeline Enforcement - Non-Negotiable Rules
+
+Agents working in this repository must pass all CI checks by fixing code, not by bypassing checks.
+
+### Prohibited Actions
+1. Adding ignore/suppression directives (`# noqa`, `# pylint: disable`, `# type: ignore`, `policy_guard: allow-*`)
+2. Modifying CI pipeline configuration to skip tests or weaken checks
+3. Editing guard scripts to relax enforcement thresholds
+4. Adding entries to ignore lists, allowlists, or exclusion files to bypass failures
+5. Disabling, skipping, or commenting out failing tests
+
+### Required Actions
+1. Fix the root cause in the code
+2. Refactor to meet architectural constraints (complexity, size, structure)
+3. Correct type errors with proper type annotations
+4. Improve code quality to satisfy linting rules
+5. Increase test coverage by writing additional tests
+6. Ask for human guidance when the correct fix approach is ambiguous
+
+### Enforcement Examples
+
+| CI Failure | ❌ Wrong Approach | ✅ Correct Approach |
+|------------|------------------|---------------------|
+| Too many arguments (>7) | Add `# pylint: disable` | Refactor to use dataclass/config object |
+| Type error | Add `# type: ignore` | Fix the type annotation or refactor |
+| Hardcoded secret detected | Add to `.gitleaks.toml` | Move to environment variable/config |
+| Broad exception handler | Add `policy_guard: allow-broad-except` | Catch specific exception types |
+| Coverage below 80% | Lower threshold in config | Write tests for uncovered code |
+| Function too complex | Add complexity ignore | Extract smaller functions |
+| Class too large (>100 lines) | Increase structure guard limit | Split into multiple classes |
+
+If fixing a CI failure requires architectural changes and you're uncertain about the approach, stop and request human guidance before proceeding.
+
 ## CI Rules & Guard Contract
 `ci_tools/scripts/ci.sh` (invoked by `make check`) enforces the rules below before any code lands. Treat them as non-negotiable when proposing changes or running automation.
 

@@ -49,9 +49,10 @@ def test_extract_base_names_simple():
     """Test extracting base names from simple inheritance."""
     source = "class Child(Parent): pass"
     tree = inheritance_guard.ast.parse(source)
-    class_node = tree.body[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, inheritance_guard.ast.ClassDef)
 
-    base_names = inheritance_guard.extract_base_names(class_node)
+    base_names = inheritance_guard.extract_base_names(stmt)
     assert base_names == ["Parent"]
 
 
@@ -59,9 +60,10 @@ def test_extract_base_names_multiple():
     """Test extracting multiple base names."""
     source = "class Child(Parent1, Parent2): pass"
     tree = inheritance_guard.ast.parse(source)
-    class_node = tree.body[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, inheritance_guard.ast.ClassDef)
 
-    base_names = inheritance_guard.extract_base_names(class_node)
+    base_names = inheritance_guard.extract_base_names(stmt)
     assert base_names == ["Parent1", "Parent2"]
 
 
@@ -69,9 +71,10 @@ def test_extract_base_names_attribute():
     """Test extracting base names with module attributes."""
     source = "class Child(module.Parent): pass"
     tree = inheritance_guard.ast.parse(source)
-    class_node = tree.body[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, inheritance_guard.ast.ClassDef)
 
-    base_names = inheritance_guard.extract_base_names(class_node)
+    base_names = inheritance_guard.extract_base_names(stmt)
     assert base_names == ["module.Parent"]
 
 
@@ -79,9 +82,10 @@ def test_extract_base_names_nested_attribute():
     """Test extracting base names with nested module attributes."""
     source = "class Child(package.module.Parent): pass"
     tree = inheritance_guard.ast.parse(source)
-    class_node = tree.body[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, inheritance_guard.ast.ClassDef)
 
-    base_names = inheritance_guard.extract_base_names(class_node)
+    base_names = inheritance_guard.extract_base_names(stmt)
     assert base_names == ["package.module.Parent"]
 
 
@@ -89,9 +93,10 @@ def test_extract_base_names_no_bases():
     """Test extracting base names with no bases."""
     source = "class Child: pass"
     tree = inheritance_guard.ast.parse(source)
-    class_node = tree.body[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, inheritance_guard.ast.ClassDef)
 
-    base_names = inheritance_guard.extract_base_names(class_node)
+    base_names = inheritance_guard.extract_base_names(stmt)
     assert base_names == []
 
 
@@ -360,9 +365,10 @@ def test_extract_base_names_complex_expression():
     """Test extract_base_names handles non-Name and non-Attribute bases."""
     source = "class Child(Parent if condition else Other): pass"
     tree = inheritance_guard.ast.parse(source)
-    class_node = tree.body[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, inheritance_guard.ast.ClassDef)
 
-    base_names = inheritance_guard.extract_base_names(class_node)
+    base_names = inheritance_guard.extract_base_names(stmt)
     # Should handle gracefully, possibly returning empty or partial
     assert isinstance(base_names, list)
 

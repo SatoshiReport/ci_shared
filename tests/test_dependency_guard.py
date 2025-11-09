@@ -50,7 +50,10 @@ def test_callee_name_simple():
     """Test extracting callee name from simple call."""
     source = "Foo()"
     tree = ast.parse(source)
-    call_node = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call_node = stmt.value
 
     name = dependency_guard._callee_name(call_node)
     assert name == "Foo"
@@ -60,7 +63,10 @@ def test_callee_name_attribute():
     """Test extracting callee name from attribute call."""
     source = "module.Foo()"
     tree = ast.parse(source)
-    call_node = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call_node = stmt.value
 
     name = dependency_guard._callee_name(call_node)
     assert name == "Foo"
@@ -70,7 +76,10 @@ def test_callee_name_complex():
     """Test extracting callee name from complex expression."""
     source = "(foo if condition else bar)()"
     tree = ast.parse(source)
-    call_node = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call_node = stmt.value
 
     name = dependency_guard._callee_name(call_node)
     assert name is None
@@ -109,8 +118,9 @@ def test_count_instantiations_basic():
     ).strip()
 
     tree = ast.parse(source)
-    func_node = tree.body[0]
-    count, classes = dependency_guard.count_instantiations(func_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    count, classes = dependency_guard.count_instantiations(stmt)
 
     assert count == 2
     assert "Foo" in classes
@@ -129,8 +139,9 @@ def test_count_instantiations_ignores_lowercase():
     ).strip()
 
     tree = ast.parse(source)
-    func_node = tree.body[0]
-    count, classes = dependency_guard.count_instantiations(func_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    count, classes = dependency_guard.count_instantiations(stmt)
 
     assert count == 1
     assert "Service" in classes
@@ -149,8 +160,9 @@ def test_count_instantiations_ignores_skipped():
     ).strip()
 
     tree = ast.parse(source)
-    func_node = tree.body[0]
-    count, classes = dependency_guard.count_instantiations(func_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    count, classes = dependency_guard.count_instantiations(stmt)
 
     assert count == 1
     assert "Service" in classes
@@ -167,8 +179,9 @@ def test_count_instantiations_no_instantiations():
     ).strip()
 
     tree = ast.parse(source)
-    func_node = tree.body[0]
-    count, classes = dependency_guard.count_instantiations(func_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    count, classes = dependency_guard.count_instantiations(stmt)
 
     assert count == 0
     assert classes == []
@@ -297,8 +310,9 @@ def test_count_instantiations_nested_calls():
     ).strip()
 
     tree = ast.parse(source)
-    func_node = tree.body[0]
-    count, classes = dependency_guard.count_instantiations(func_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    count, classes = dependency_guard.count_instantiations(stmt)
 
     assert count == 3  # Foo, Bar, Baz
     assert "Foo" in classes
@@ -334,7 +348,10 @@ def test_callee_name_subscript():
     """Test callee name with subscript expression."""
     source = "foo[0]()"
     tree = ast.parse(source)
-    call_node = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call_node = stmt.value
 
     name = dependency_guard._callee_name(call_node)
     assert name is None
@@ -352,8 +369,9 @@ def test_count_instantiations_in_nested_function():
     ).strip()
 
     tree = ast.parse(source)
-    func_node = tree.body[0]
-    count, classes = dependency_guard.count_instantiations(func_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    count, classes = dependency_guard.count_instantiations(stmt)
 
     # Should count Service even though it's in nested function
     assert count == 1

@@ -82,7 +82,7 @@ def test_function_entry_is_frozen():
         length=20,
     )
     with pytest.raises(AttributeError):
-        entry.name = "other"
+        setattr(entry, "name", "other")
 
 
 def test_module_context_dataclass():
@@ -141,8 +141,9 @@ def test_normalize_function_simple():
             return x + y
     """)
     tree = ast.parse(source)
-    func = tree.body[0]
-    result = normalize_function(func)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    result = normalize_function(stmt)
     assert isinstance(result, str)
     assert "FunctionDef" in result
 
@@ -155,8 +156,9 @@ def test_normalize_function_with_docstring():
             return x + 1
     """)
     tree = ast.parse(source)
-    func = tree.body[0]
-    result = normalize_function(func)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    result = normalize_function(stmt)
     # Docstring should be removed from normalized form
     assert isinstance(result, str)
 
@@ -168,8 +170,9 @@ def test_normalize_function_async():
             return x + y
     """)
     tree = ast.parse(source)
-    func = tree.body[0]
-    result = normalize_function(func)
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.AsyncFunctionDef)
+    result = normalize_function(stmt)
     assert isinstance(result, str)
     assert "AsyncFunctionDef" in result
 
@@ -286,7 +289,10 @@ def test_resolve_default_argument_positional():
     """Test _resolve_default_argument with positional args."""
     source = "func(1, 2, 3)"
     tree = ast.parse(source)
-    call = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call = stmt.value
     result = _resolve_default_argument(call, positional_index=1, keyword_names={"key"})
     assert isinstance(result, ast.Constant)
     assert result.value == 2
@@ -296,7 +302,10 @@ def test_resolve_default_argument_keyword():
     """Test _resolve_default_argument with keyword args."""
     source = "func(1, default=42)"
     tree = ast.parse(source)
-    call = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call = stmt.value
     result = _resolve_default_argument(call, positional_index=5, keyword_names={"default"})
     assert isinstance(result, ast.Constant)
     assert result.value == 42
@@ -306,7 +315,10 @@ def test_resolve_default_argument_not_found():
     """Test _resolve_default_argument when argument not found."""
     source = "func(1, 2)"
     tree = ast.parse(source)
-    call = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call = stmt.value
     result = _resolve_default_argument(call, positional_index=5, keyword_names={"missing"})
     assert result is None
 
@@ -315,7 +327,10 @@ def test_get_call_qualname_simple():
     """Test get_call_qualname with simple name."""
     source = "foo()"
     tree = ast.parse(source)
-    call = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call = stmt.value
     result = get_call_qualname(call.func)
     assert result == "foo"
 
@@ -324,7 +339,10 @@ def test_get_call_qualname_attribute():
     """Test get_call_qualname with attribute access."""
     source = "obj.method()"
     tree = ast.parse(source)
-    call = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call = stmt.value
     result = get_call_qualname(call.func)
     assert result == "obj.method"
 
@@ -333,7 +351,10 @@ def test_get_call_qualname_nested_attribute():
     """Test get_call_qualname with nested attribute access."""
     source = "a.b.c.d()"
     tree = ast.parse(source)
-    call = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call = stmt.value
     result = get_call_qualname(call.func)
     assert result == "a.b.c.d"
 
@@ -342,7 +363,10 @@ def test_get_call_qualname_unsupported():
     """Test get_call_qualname with unsupported node type."""
     source = "(lambda: None)()"
     tree = ast.parse(source)
-    call = tree.body[0].value
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert isinstance(stmt.value, ast.Call)
+    call = stmt.value
     result = get_call_qualname(call.func)
     assert result is None
 
@@ -351,24 +375,27 @@ def test_is_non_none_literal_constant():
     """Test is_non_none_literal with non-None constant."""
     source = "42"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert is_non_none_literal(node) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert is_non_none_literal(stmt.value) is True
 
 
 def test_is_non_none_literal_none():
     """Test is_non_none_literal with None."""
     source = "None"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert is_non_none_literal(node) is False
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert is_non_none_literal(stmt.value) is False
 
 
 def test_is_non_none_literal_not_constant():
     """Test is_non_none_literal with non-constant."""
     source = "x + 1"
     tree = ast.parse(source)
-    node = tree.body[0].value
-    assert is_non_none_literal(node) is False
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Expr)
+    assert is_non_none_literal(stmt.value) is False
 
 
 def test_is_logging_call_true():
@@ -405,7 +432,9 @@ def test_handler_has_raise_true():
             raise
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Try)
+    handler = stmt.handlers[0]
     assert handler_has_raise(handler) is True
 
 
@@ -418,7 +447,9 @@ def test_handler_has_raise_false():
             pass
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Try)
+    handler = stmt.handlers[0]
     assert handler_has_raise(handler) is False
 
 
@@ -431,7 +462,9 @@ def test_classify_handler_with_raise():
             raise
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Try)
+    handler = stmt.handlers[0]
     assert classify_handler(handler) is None
 
 
@@ -444,8 +477,11 @@ def test_classify_handler_empty():
             pass
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Try)
+    handler = stmt.handlers[0]
     result = classify_handler(handler)
+    assert result is not None
     assert "suppresses exception with pass" in result
 
 
@@ -459,8 +495,13 @@ def test_classify_handler_continue():
                 continue
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.For)
+    try_stmt = stmt.body[0]
+    assert isinstance(try_stmt, ast.Try)
+    handler = try_stmt.handlers[0]
     result = classify_handler(handler)
+    assert result is not None
     assert "suppresses exception with continue" in result
 
 
@@ -474,8 +515,13 @@ def test_classify_handler_break():
                 break
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.While)
+    try_stmt = stmt.body[0]
+    assert isinstance(try_stmt, ast.Try)
+    handler = try_stmt.handlers[0]
     result = classify_handler(handler)
+    assert result is not None
     assert "suppresses exception with break" in result
 
 
@@ -489,8 +535,13 @@ def test_classify_handler_literal_return():
                 return None
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    try_stmt = stmt.body[0]
+    assert isinstance(try_stmt, ast.Try)
+    handler = try_stmt.handlers[0]
     result = classify_handler(handler)
+    assert result is not None
     assert "suppresses exception with literal return" in result
 
 
@@ -504,8 +555,13 @@ def test_classify_handler_logging():
                 logging.error(str(e))
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    try_stmt = stmt.body[0]
+    assert isinstance(try_stmt, ast.Try)
+    handler = try_stmt.handlers[0]
     result = classify_handler(handler)
+    assert result is not None
     assert "logs exception without re-raising" in result
 
 
@@ -519,8 +575,13 @@ def test_classify_handler_no_reraise():
                 handle_error()
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.FunctionDef)
+    try_stmt = stmt.body[0]
+    assert isinstance(try_stmt, ast.Try)
+    handler = try_stmt.handlers[0]
     result = classify_handler(handler)
+    assert result is not None
     assert "exception handler without re-raise" in result
 
 
@@ -528,32 +589,36 @@ def test_is_literal_none_guard_is():
     """Test is_literal_none_guard with 'is None' check."""
     source = "if x is None: pass"
     tree = ast.parse(source)
-    test = tree.body[0].test
-    assert is_literal_none_guard(test) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.If)
+    assert is_literal_none_guard(stmt.test) is True
 
 
 def test_is_literal_none_guard_eq():
     """Test is_literal_none_guard with '== None' check."""
     source = "if x == None: pass"
     tree = ast.parse(source)
-    test = tree.body[0].test
-    assert is_literal_none_guard(test) is True
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.If)
+    assert is_literal_none_guard(stmt.test) is True
 
 
 def test_is_literal_none_guard_false():
     """Test is_literal_none_guard with non-None check."""
     source = "if x > 0: pass"
     tree = ast.parse(source)
-    test = tree.body[0].test
-    assert is_literal_none_guard(test) is False
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.If)
+    assert is_literal_none_guard(stmt.test) is False
 
 
 def test_is_literal_none_guard_multiple_comparators():
     """Test is_literal_none_guard with multiple comparators."""
     source = "if 0 < x < 10: pass"
     tree = ast.parse(source)
-    test = tree.body[0].test
-    assert is_literal_none_guard(test) is False
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.If)
+    assert is_literal_none_guard(stmt.test) is False
 
 
 def test_handler_contains_suppression_true():
@@ -565,7 +630,9 @@ def test_handler_contains_suppression_true():
             pass
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Try)
+    handler = stmt.handlers[0]
     lines = source.splitlines()
     result = handler_contains_suppression(handler, lines, "policy_guard: allow-broad-except")
     assert result is True
@@ -580,7 +647,9 @@ def test_handler_contains_suppression_false():
             pass
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Try)
+    handler = stmt.handlers[0]
     lines = source.splitlines()
     result = handler_contains_suppression(handler, lines, "policy_guard: allow-broad-except")
     assert result is False
@@ -595,6 +664,8 @@ def test_handler_contains_suppression_empty_lines():
             pass
     """)
     tree = ast.parse(source)
-    handler = tree.body[0].handlers[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, ast.Try)
+    handler = stmt.handlers[0]
     result = handler_contains_suppression(handler, [], "token")
     assert result is False

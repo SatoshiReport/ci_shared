@@ -67,8 +67,9 @@ def test_class_line_span_basic(tmp_path: Path):
     ).strip()
 
     tree = structure_guard.ast.parse(source)
-    class_node = tree.body[0]
-    start, end = get_class_line_span(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, structure_guard.ast.ClassDef)
+    start, end = get_class_line_span(stmt)
 
     assert start == 1
     assert end == 3
@@ -78,13 +79,14 @@ def test_class_line_span_no_end_lineno(tmp_path: Path):
     """Test class_line_span when end_lineno is None."""
     source = "class Foo: pass"
     tree = structure_guard.ast.parse(source)
-    class_node = tree.body[0]
+    stmt = tree.body[0]
+    assert isinstance(stmt, structure_guard.ast.ClassDef)
 
     # Simulate missing end_lineno
-    if hasattr(class_node, "end_lineno"):
-        delattr(class_node, "end_lineno")
+    if hasattr(stmt, "end_lineno"):
+        delattr(stmt, "end_lineno")
 
-    start, end = get_class_line_span(class_node)
+    start, end = get_class_line_span(stmt)
     assert start == 1
     assert end >= start
 
@@ -105,8 +107,9 @@ def test_class_line_span_nested_content(tmp_path: Path):
     ).strip()
 
     tree = structure_guard.ast.parse(source)
-    class_node = tree.body[0]
-    start, end = get_class_line_span(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, structure_guard.ast.ClassDef)
+    start, end = get_class_line_span(stmt)
 
     assert start == 1
     assert end == 8
@@ -243,8 +246,9 @@ def test_class_line_span_single_line_class():
     """Test class_line_span with single-line class."""
     source = "class Foo: pass"
     tree = structure_guard.ast.parse(source)
-    class_node = tree.body[0]
-    start, end = get_class_line_span(class_node)
+    stmt = tree.body[0]
+    assert isinstance(stmt, structure_guard.ast.ClassDef)
+    start, end = get_class_line_span(stmt)
 
     assert start == 1
     assert end == 1

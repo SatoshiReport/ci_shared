@@ -105,24 +105,27 @@ class TestASTUtilities:
         """Test extracting names from simple assignment."""
         code = "x = 10"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        names = list(data_guard.extract_target_names(assign.targets[0]))
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Assign)
+        names = list(data_guard.extract_target_names(stmt.targets[0]))
         assert names == ["x"]
 
     def test_extract_target_names_tuple(self) -> None:
         """Test extracting names from tuple unpacking."""
         code = "x, y = 1, 2"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        names = list(data_guard.extract_target_names(assign.targets[0]))
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Assign)
+        names = list(data_guard.extract_target_names(stmt.targets[0]))
         assert set(names) == {"x", "y"}
 
     def test_extract_target_names_attribute(self) -> None:
         """Test extracting names from attribute assignment."""
         code = "obj.attr = 10"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        names = list(data_guard.extract_target_names(assign.targets[0]))
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Assign)
+        names = list(data_guard.extract_target_names(stmt.targets[0]))
         assert names == ["attr"]
 
     def test_is_all_caps_identifier(self) -> None:
@@ -138,25 +141,29 @@ class TestASTUtilities:
         """Test numeric constant detection."""
         code = "x = 42"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        assert data_guard.is_numeric_constant(assign.value)
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Assign)
+        assert data_guard.is_numeric_constant(stmt.value)
 
         code = "x = 'string'"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        assert not data_guard.is_numeric_constant(assign.value)
+        stmt2 = tree.body[0]
+        assert isinstance(stmt2, ast.Assign)
+        assert not data_guard.is_numeric_constant(stmt2.value)
 
     def test_literal_value_repr(self) -> None:
         """Test literal value representation."""
         code = "x = 42"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        assert data_guard.literal_value_repr(assign.value) == "42"
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Assign)
+        assert data_guard.literal_value_repr(stmt.value) == "42"
 
         code = "x = 'string'"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        assert data_guard.literal_value_repr(assign.value) == "'string'"
+        stmt2 = tree.body[0]
+        assert isinstance(stmt2, ast.Assign)
+        assert data_guard.literal_value_repr(stmt2.value) == "'string'"
 
         assert "None" in data_guard.literal_value_repr(None)
 
@@ -168,28 +175,31 @@ class TestAssignmentViolations:
         """Test flagging assignment with sensitive name."""
         code = "threshold = 100"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        names = list(data_guard.extract_target_names(assign.targets[0]))
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Assign)
+        names = list(data_guard.extract_target_names(stmt.targets[0]))
 
-        assert data_guard._should_flag_assignment(names, assign.value)
+        assert data_guard._should_flag_assignment(names, stmt.value)
 
     def test_should_flag_assignment_constant_ignored(self) -> None:
         """Test that all-caps constants are not flagged."""
         code = "MAX_THRESHOLD = 100"
         tree = ast.parse(code)
-        assign = tree.body[0]
-        names = list(data_guard.extract_target_names(assign.targets[0]))
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Assign)
+        names = list(data_guard.extract_target_names(stmt.targets[0]))
 
-        assert not data_guard._should_flag_assignment(names, assign.value)
+        assert not data_guard._should_flag_assignment(names, stmt.value)
 
     def test_should_flag_assignment_allowed_literals(self) -> None:
         """Test that 0, 1, -1 are not flagged."""
         for value in [0, 1, -1]:
             code = f"threshold = {value}"
             tree = ast.parse(code)
-            assign = tree.body[0]
-            names = list(data_guard.extract_target_names(assign.targets[0]))
-            assert not data_guard._should_flag_assignment(names, assign.value)
+            stmt = tree.body[0]
+            assert isinstance(stmt, ast.Assign)
+            names = list(data_guard.extract_target_names(stmt.targets[0]))
+            assert not data_guard._should_flag_assignment(names, stmt.value)
 
     def test_contains_sensitive_token(self) -> None:
         """Test sensitive token detection."""
@@ -202,10 +212,11 @@ class TestAssignmentViolations:
         """Test creating violation from simple assignment."""
         code = "threshold = 100"
         tree = ast.parse(code)
-        assign = tree.body[0]
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Assign)
 
         with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
-            violation = data_guard._assignment_violation_from_node(tmp_path / "test.py", assign)
+            violation = data_guard._assignment_violation_from_node(tmp_path / "test.py", stmt)
             assert violation is not None
             assert "literal assignment" in violation.message
             assert "threshold" in violation.message
@@ -214,10 +225,11 @@ class TestAssignmentViolations:
         """Test creating violation from annotated assignment."""
         code = "max_retries: int = 5"
         tree = ast.parse(code)
-        assign = tree.body[0]
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.AnnAssign)
 
         with patch.object(data_guard, "ALLOWLIST", {"assignments": set(), "comparisons": set(), "dataframe": set()}):
-            violation = data_guard._assignment_violation_from_node(tmp_path / "test.py", assign)
+            violation = data_guard._assignment_violation_from_node(tmp_path / "test.py", stmt)
             assert violation is not None
             assert "annotated literal assignment" in violation.message
             assert "max_retries" in violation.message
@@ -260,8 +272,10 @@ class TestComparisonViolations:
         """Test extracting literal comparators."""
         code = "if threshold > 100: pass"
         tree = ast.parse(code)
-        if_node = tree.body[0]
-        compare = if_node.test
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.If)
+        assert isinstance(stmt.test, ast.Compare)
+        compare = stmt.test
 
         literals = data_guard._literal_comparators(compare)
         assert len(literals) == 1
@@ -272,8 +286,10 @@ class TestComparisonViolations:
         for value in [0, 1, -1]:
             code = f"if threshold > {value}: pass"
             tree = ast.parse(code)
-            if_node = tree.body[0]
-            compare = if_node.test
+            stmt = tree.body[0]
+            assert isinstance(stmt, ast.If)
+            assert isinstance(stmt.test, ast.Compare)
+            compare = stmt.test
 
             literals = data_guard._literal_comparators(compare)
             assert len(literals) == 0
@@ -282,8 +298,10 @@ class TestComparisonViolations:
         """Test extracting comparison targets."""
         code = "if threshold > 100: pass"
         tree = ast.parse(code)
-        if_node = tree.body[0]
-        compare = if_node.test
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.If)
+        assert isinstance(stmt.test, ast.Compare)
+        compare = stmt.test
 
         targets = data_guard._comparison_targets(compare)
         assert targets == ["threshold"]
@@ -292,9 +310,13 @@ class TestComparisonViolations:
         """Test formatting comparison violation message."""
         code = "if threshold > 100: pass"
         tree = ast.parse(code)
-        if_node = tree.body[0]
-        compare = if_node.test
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.If)
+        assert isinstance(stmt.test, ast.Compare)
+        compare = stmt.test
 
+        assert len(compare.comparators) > 0
+        assert isinstance(compare.comparators[0], ast.Constant)
         literals = [compare.comparators[0]]
         message = data_guard._format_comparison_message(literals, ["threshold"])
         assert "comparison against literal" in message
@@ -332,36 +354,42 @@ class TestDataframeLiterals:
         """Test detecting literal datasets in lists."""
         code = "[1, 2, 3]"
         tree = ast.parse(code)
-        expr = tree.body[0]
-        assert data_guard.contains_literal_dataset(expr.value)
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Expr)
+        assert data_guard.contains_literal_dataset(stmt.value)
 
     def test_contains_literal_dataset_dict(self) -> None:
         """Test detecting literal datasets in dicts."""
         code = "{'a': 1, 'b': 2}"
         tree = ast.parse(code)
-        expr = tree.body[0]
-        assert data_guard.contains_literal_dataset(expr.value)
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Expr)
+        assert data_guard.contains_literal_dataset(stmt.value)
 
     def test_contains_literal_dataset_nested(self) -> None:
         """Test detecting literal datasets in nested structures."""
         code = "[[1, 2], [3, 4]]"
         tree = ast.parse(code)
-        expr = tree.body[0]
-        assert data_guard.contains_literal_dataset(expr.value)
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Expr)
+        assert data_guard.contains_literal_dataset(stmt.value)
 
     def test_contains_literal_dataset_empty(self) -> None:
         """Test that empty containers don't count as literal datasets."""
         code = "[]"
         tree = ast.parse(code)
-        expr = tree.body[0]
-        assert not data_guard.contains_literal_dataset(expr.value)
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Expr)
+        assert not data_guard.contains_literal_dataset(stmt.value)
 
     def test_get_call_qualname(self) -> None:
         """Test extracting qualified names from calls."""
         code = "pd.DataFrame()"
         tree = ast.parse(code)
-        expr = tree.body[0]
-        call = expr.value
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Expr)
+        assert isinstance(stmt.value, ast.Call)
+        call = stmt.value
 
         qualname = data_guard.get_call_qualname(call.func)
         assert qualname == "pd.DataFrame"
@@ -370,8 +398,10 @@ class TestDataframeLiterals:
         """Test extracting simple names from calls."""
         code = "DataFrame()"
         tree = ast.parse(code)
-        expr = tree.body[0]
-        call = expr.value
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Expr)
+        assert isinstance(stmt.value, ast.Call)
+        call = stmt.value
 
         qualname = data_guard.get_call_qualname(call.func)
         assert qualname == "DataFrame"
@@ -380,8 +410,10 @@ class TestDataframeLiterals:
         """Test detecting literal arguments in calls."""
         code = "pd.DataFrame([1, 2, 3])"
         tree = ast.parse(code)
-        expr = tree.body[0]
-        call = expr.value
+        stmt = tree.body[0]
+        assert isinstance(stmt, ast.Expr)
+        assert isinstance(stmt.value, ast.Call)
+        call = stmt.value
 
         assert data_guard._call_contains_literal_arguments(call)
 
@@ -449,7 +481,7 @@ class TestViolationDataclass:
         )
 
         with pytest.raises(Exception):  # FrozenInstanceError
-            violation.lineno = 43
+            setattr(violation, "lineno", 43)
 
 
 class TestMainFunction:
