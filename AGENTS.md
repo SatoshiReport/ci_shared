@@ -19,7 +19,7 @@
 
 ## Testing Guidelines
 - Tests live under `tests/` mirroring module structure; naming: `test_<module>.py` with pytest functions/classes prefixed `test_`.
-- Run `pytest tests/ --cov=ci_tools --cov-fail-under=80` (invoked automatically via `make check`).
+- Run `pytest -n 7 tests/ --cov=ci_tools --cov-fail-under=80` (invoked automatically via `make check`).
 - Use fixtures from `tests/conftest.py` for guard config/state; add regression tests alongside new guard scripts or config loaders.
 
 ## Commit & Pull Request Guidelines
@@ -85,7 +85,7 @@ If fixing a CI failure requires architectural changes and you're uncertain about
 - `pylint -j 7 ci_tools` runs with Ruff’s strict profile (max args 7, branches 10, statements 50).
 
 ### Tests, Coverage, and Bytecode
-- Run `pytest tests/ --cov=ci_tools --cov-fail-under=80`; the same threshold is enforced by `python -m ci_tools.scripts.coverage_guard --threshold 80 --data-file .coverage`.
+- Run `pytest -n 7 tests/ --cov=ci_tools --cov-fail-under=80`; the same threshold is enforced by `python -m ci_tools.scripts.coverage_guard --threshold 80 --data-file .coverage`.
 - `python -m compileall ci_tools tests scripts` executes last to catch syntax errors without executing code paths.
 
 ### Guard Thresholds

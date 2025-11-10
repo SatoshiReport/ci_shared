@@ -118,7 +118,7 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-ignore = []
+ignore = ["TRY003"]  # Allow long exception messages
 select = [
     "TRY",
     "C90",
@@ -131,7 +131,6 @@ max-complexity = 10
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
     "TRY002",
-    "TRY003",
     "TRY203",
     "PLR2004",
 ]

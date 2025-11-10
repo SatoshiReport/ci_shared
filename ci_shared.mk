@@ -148,7 +148,7 @@ shared-checks:
 			find "$$DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true; \
 		fi; \
 	done
-	pytest $(SHARED_PYTEST_TARGET) --cov=$(SHARED_PYTEST_COV_TARGET) --cov-fail-under=$(SHARED_PYTEST_THRESHOLD) -W error $(SHARED_PYTEST_EXTRA)
+	pytest -n $(PYTEST_NODES) $(SHARED_PYTEST_TARGET) --cov=$(SHARED_PYTEST_COV_TARGET) --cov-fail-under=$(SHARED_PYTEST_THRESHOLD) -W error $(SHARED_PYTEST_EXTRA)
 	$(PYTHON) -m ci_tools.scripts.coverage_guard --threshold $(COVERAGE_GUARD_THRESHOLD) --data-file "$(CURDIR)/.coverage"
 	$(PYTHON) -m compileall $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT)
 	@echo "✅ All shared CI checks passed!"

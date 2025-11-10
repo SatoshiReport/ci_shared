@@ -72,7 +72,7 @@ extend-exclude = ["ci_tools/vendor"]
 
 [tool.ruff.lint]
 select = ["TRY", "C90", "PLR"]  # C90=McCabe complexity, PLR=Pylint refactor
-ignore = []
+ignore = ["TRY003"]  # Allow long exception messages
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
@@ -83,4 +83,4 @@ max-branches = 10
 max-statements = 50
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["TRY002", "TRY003", "TRY203", "PLR2004"]
+"tests/**" = ["TRY002", "TRY203", "PLR2004"]
