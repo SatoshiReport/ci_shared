@@ -148,8 +148,22 @@ def _commit_and_push_update(
 
     print(f"✓ Committed shared CI updates in {repo_name}")
 
+    # Get current branch name
+    branch_result = run_command(
+        ["git", "branch", "--show-current"],
+        cwd=repo_path,
+        check=False,
+    )
+    if branch_result.returncode != 0:
+        print(f"⚠️  Failed to determine current branch in {repo_name}")
+        print(f"   Run 'cd {repo_path} && git push' to push manually")
+        return False
+
+    current_branch = branch_result.stdout.strip()
+
+    # Push with --set-upstream to handle branches without upstream configured
     result = run_command(
-        ["git", "push"],
+        ["git", "push", "--set-upstream", "origin", current_branch],
         cwd=repo_path,
         check=False,
     )

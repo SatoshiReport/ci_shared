@@ -231,6 +231,24 @@ def test_commit_and_push_update_commit_failure(tmp_path):
         assert result is False
 
 
+def test_commit_and_push_update_branch_detection_failure(tmp_path):
+    """Test _commit_and_push_update with branch detection failure."""
+    repo_path = tmp_path / "repo"
+
+    with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
+        mock_run.side_effect = [
+            subprocess.CompletedProcess(args=["git", "commit"], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                args=["git", "branch", "--show-current"],
+                returncode=1,
+                stdout="",
+                stderr="error",
+            ),
+        ]
+        result = _commit_and_push_update(repo_path, "repo", "Test commit")
+        assert result is False
+
+
 def test_commit_and_push_update_push_failure(tmp_path):
     """Test _commit_and_push_update with push failure."""
     repo_path = tmp_path / "repo"
@@ -238,6 +256,12 @@ def test_commit_and_push_update_push_failure(tmp_path):
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
         mock_run.side_effect = [
             subprocess.CompletedProcess(args=["git", "commit"], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                args=["git", "branch", "--show-current"],
+                returncode=0,
+                stdout="main",
+                stderr="",
+            ),
             subprocess.CompletedProcess(
                 args=["git", "push"], returncode=1, stdout="", stderr="error"
             ),
@@ -256,6 +280,12 @@ def test_commit_and_push_update_success(tmp_path):
                 args=["git", "commit"],
                 returncode=0,
                 stdout="",
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=["git", "branch", "--show-current"],
+                returncode=0,
+                stdout="main",
                 stderr="",
             ),
             subprocess.CompletedProcess(
