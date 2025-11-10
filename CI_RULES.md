@@ -29,7 +29,7 @@ Everything below is enforced by `ci_tools/scripts/ci.sh` (which just runs `make 
 ---
 
 ## 3. Testing & Coverage
-- Command: `pytest -n 7 tests/ --cov=ci_tools --cov-fail-under=80` (threshold pulled from `ci_shared.mk`).
+- Command: `pytest tests/ --cov=ci_tools --cov-fail-under=80` (threshold pulled from `ci_shared.mk`).
 - `python -m ci_tools.scripts.coverage_guard --threshold 80 --data-file .coverage` ensures the recorded coverage meets the same floor.
 - `python -m compileall src tests` runs last to catch syntax errors without executing code.
 

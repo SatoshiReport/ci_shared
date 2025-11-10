@@ -136,7 +136,7 @@ The toolkit includes specialized guard scripts that enforce code quality policie
 9. `pylint -j 7 ci_tools` using Ruff’s strict profile (max args 7, branches 10, statements 50).
 
 ### Tests, Coverage, and Bytecode
-- `pytest -n 7 tests/ --cov=ci_tools --cov-fail-under=80` with fixtures from `tests/conftest.py`.
+- `pytest tests/ --cov=ci_tools --cov-fail-under=80` with fixtures from `tests/conftest.py`.
 - `python -m ci_tools.scripts.coverage_guard --threshold 80 --data-file .coverage` enforces the same coverage floor.
 - `python -m compileall ci_tools tests scripts` runs last to surface syntax errors without executing business logic.
 
