@@ -43,9 +43,13 @@ addopts = [
 ]
 
 [tool.coverage.run]
+# Exclude test code from coverage - we only measure production code
 omit = [
     "*/vendor/*",
     "*/__main__.py",
+    "tests/*",           # Exclude test directory
+    "*/tests/*",         # Exclude tests in any subdirectory
+    "*_test_*.py",       # Exclude test utility files (e.g., api_test_utils.py)
 ]
 
 [tool.bandit]

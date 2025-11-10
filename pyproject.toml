@@ -67,6 +67,12 @@ ci_tools = ["scripts/*.sh", "scripts/*.py", "vendor/**/*", "config/*"]
 # To sync: python -m ci_tools.scripts.tool_config_guard --sync
 # =============================================================================
 
+[tool.pylint.MAIN]
+init-hook = "import sys; sys.path.insert(0, 'tests')"
+
+[tool.pylint.SIMILARITIES]
+min-similarity-lines = 7
+
 [tool.bandit]
 exclude_dirs = [
     "/vendor/",
@@ -99,6 +105,9 @@ skips = [
 omit = [
     "*/vendor/*",
     "*/__main__.py",
+    "tests/*",
+    "*/tests/*",
+    "*_test_*.py",
 ]
 
 [tool.pytest]
@@ -118,7 +127,9 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-ignore = ["TRY003"]  # Allow long exception messages
+ignore = [
+    "TRY003",
+]
 select = [
     "TRY",
     "C90",
@@ -139,9 +150,3 @@ max-complexity = 10
 max-args = 7
 max-branches = 10
 max-statements = 50
-
-[tool.pylint.MAIN]
-init-hook = "import sys; sys.path.insert(0, 'tests')"
-
-[tool.pylint.SIMILARITIES]
-min-similarity-lines = 7
