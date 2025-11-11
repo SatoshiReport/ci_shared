@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import textwrap
 from pathlib import Path
 from unittest.mock import patch
@@ -10,14 +11,25 @@ import pytest
 
 from conftest import write_module
 from ci_tools.scripts import unused_module_guard
-from ci_tools.scripts.unused_module_guard import SUSPICIOUS_PATTERNS
+from ci_tools.scripts.duplicate_detection import (
+    SUSPICIOUS_PATTERNS,
+    duplicate_reason,
+    find_suspicious_duplicates,
+)
+from ci_tools.scripts.import_analysis import (
+    ImportCollector,
+    collect_all_imports,
+    collect_all_imports_with_parent,
+    get_module_name,
+)
+from ci_tools.scripts.import_checking import module_is_imported
 
 
 def test_import_collector_simple_import():
     """Test ImportCollector with simple import."""
     source = "import foo"
-    tree = unused_module_guard.ast.parse(source)
-    collector = unused_module_guard.ImportCollector()
+    tree = ast.parse(source)
+    collector = ImportCollector()
     collector.visit(tree)
 
     assert "foo" in collector.imports
@@ -26,8 +38,8 @@ def test_import_collector_simple_import():
 def test_import_collector_dotted_import():
     """Test ImportCollector with dotted import."""
     source = "import foo.bar.baz"
-    tree = unused_module_guard.ast.parse(source)
-    collector = unused_module_guard.ImportCollector()
+    tree = ast.parse(source)
+    collector = ImportCollector()
     collector.visit(tree)
 
     assert "foo" in collector.imports
@@ -38,8 +50,8 @@ def test_import_collector_dotted_import():
 def test_import_collector_from_import():
     """Test ImportCollector with from import."""
     source = "from foo.bar import baz"
-    tree = unused_module_guard.ast.parse(source)
-    collector = unused_module_guard.ImportCollector()
+    tree = ast.parse(source)
+    collector = ImportCollector()
     collector.visit(tree)
 
     assert "foo" in collector.imports
@@ -49,8 +61,8 @@ def test_import_collector_from_import():
 def test_import_collector_strips_src_prefix():
     """Test ImportCollector strips src. prefix."""
     source = "import src.foo.bar"
-    tree = unused_module_guard.ast.parse(source)
-    collector = unused_module_guard.ImportCollector()
+    tree = ast.parse(source)
+    collector = ImportCollector()
     collector.visit(tree)
 
     assert "foo" in collector.imports
@@ -61,8 +73,8 @@ def test_import_collector_strips_src_prefix():
 def test_import_collector_from_import_strips_src():
     """Test ImportCollector strips src. prefix from from imports."""
     source = "from src.foo.bar import baz"
-    tree = unused_module_guard.ast.parse(source)
-    collector = unused_module_guard.ImportCollector()
+    tree = ast.parse(source)
+    collector = ImportCollector()
     collector.visit(tree)
 
     assert "foo" in collector.imports
@@ -78,8 +90,8 @@ def test_import_collector_multiple_imports():
         from qux import quux
         """
     ).strip()
-    tree = unused_module_guard.ast.parse(source)
-    collector = unused_module_guard.ImportCollector()
+    tree = ast.parse(source)
+    collector = ImportCollector()
     collector.visit(tree)
 
     assert "foo" in collector.imports
@@ -91,8 +103,8 @@ def test_import_collector_multiple_imports():
 def test_import_collector_from_import_no_module():
     """Test ImportCollector with from import without module."""
     source = "from . import foo"
-    tree = unused_module_guard.ast.parse(source)
-    collector = unused_module_guard.ImportCollector()
+    tree = ast.parse(source)
+    collector = ImportCollector()
     collector.visit(tree)
 
     # Should not crash
@@ -118,7 +130,7 @@ def test_collect_all_imports(tmp_path: Path):
         """,
     )
 
-    imports = unused_module_guard.collect_all_imports(root)
+    imports = collect_all_imports(root)
 
     assert "foo" in imports
     assert "bar" in imports
@@ -135,7 +147,7 @@ def test_collect_all_imports_skips_pycache(tmp_path: Path):
     write_module(root / "module.py", "import foo")
     (pycache / "module.pyc").write_bytes(b"compiled")
 
-    imports = unused_module_guard.collect_all_imports(root)
+    imports = collect_all_imports(root)
     assert "foo" in imports
 
 
@@ -147,7 +159,7 @@ def test_collect_all_imports_handles_syntax_errors(tmp_path: Path):
     (root / "bad.py").write_text("import foo\nclass Bar:\n    def method(self\n")
     write_module(root / "good.py", "import baz")
 
-    imports = unused_module_guard.collect_all_imports(root)
+    imports = collect_all_imports(root)
     assert "baz" in imports
 
 
@@ -159,7 +171,7 @@ def test_collect_all_imports_handles_unicode_errors(tmp_path: Path):
     (root / "bad.py").write_bytes(b"\xff\xfe\x00\x00")
     write_module(root / "good.py", "import baz")
 
-    imports = unused_module_guard.collect_all_imports(root)
+    imports = collect_all_imports(root)
     assert "baz" in imports
 
 
@@ -169,7 +181,7 @@ def test_get_module_name_basic(tmp_path: Path):
     root.mkdir()
     file_path = root / "module.py"
 
-    module_name = unused_module_guard.get_module_name(file_path, root)
+    module_name = get_module_name(file_path, root)
     assert module_name == "module"
 
 
@@ -178,7 +190,7 @@ def test_get_module_name_nested(tmp_path: Path):
     root = tmp_path / "src"
     file_path = root / "foo" / "bar" / "baz.py"
 
-    module_name = unused_module_guard.get_module_name(file_path, root)
+    module_name = get_module_name(file_path, root)
     assert module_name == "foo.bar.baz"
 
 
@@ -187,7 +199,7 @@ def test_get_module_name_init(tmp_path: Path):
     root = tmp_path / "src"
     file_path = root / "foo" / "__init__.py"
 
-    module_name = unused_module_guard.get_module_name(file_path, root)
+    module_name = get_module_name(file_path, root)
     assert module_name == "foo"
 
 
@@ -196,28 +208,28 @@ def test_get_module_name_root_init(tmp_path: Path):
     root = tmp_path / "src"
     file_path = root / "__init__.py"
 
-    module_name = unused_module_guard.get_module_name(file_path, root)
+    module_name = get_module_name(file_path, root)
     assert module_name == ""
 
 
 def test_duplicate_reason_suspicious():
     """Test detecting suspicious duplicate patterns."""
-    assert unused_module_guard.duplicate_reason("module_old") is not None
-    assert unused_module_guard.duplicate_reason("module_backup") is not None
-    assert unused_module_guard.duplicate_reason("module_refactored") is not None
-    assert unused_module_guard.duplicate_reason("module_temp") is not None
+    assert duplicate_reason("module_old") is not None
+    assert duplicate_reason("module_backup") is not None
+    assert duplicate_reason("module_refactored") is not None
+    assert duplicate_reason("module_temp") is not None
 
 
 def test_duplicate_reason_not_suspicious():
     """Test that normal names are not flagged."""
-    assert unused_module_guard.duplicate_reason("module") is None
-    assert unused_module_guard.duplicate_reason("normal_name") is None
+    assert duplicate_reason("module") is None
+    assert duplicate_reason("normal_name") is None
 
 
 def test_duplicate_reason_false_positive():
     """Test that false positives are not flagged."""
-    assert unused_module_guard.duplicate_reason("max_temp") is None
-    assert unused_module_guard.duplicate_reason("phase_2") is None
+    assert duplicate_reason("max_temp") is None
+    assert duplicate_reason("phase_2") is None
 
 
 def test_find_suspicious_duplicates(tmp_path: Path):
@@ -229,7 +241,7 @@ def test_find_suspicious_duplicates(tmp_path: Path):
     (root / "module_old.py").write_text("# old")
     (root / "module_backup.py").write_text("# backup")
 
-    duplicates = unused_module_guard.find_suspicious_duplicates(root)
+    duplicates = find_suspicious_duplicates(root)
 
     assert len(duplicates) == 2
     paths = [str(d[0].name) for d in duplicates]
@@ -247,7 +259,7 @@ def test_find_suspicious_duplicates_skips_pycache(tmp_path: Path):
 
     (pycache / "module_old.pyc").write_bytes(b"compiled")
 
-    duplicates = unused_module_guard.find_suspicious_duplicates(root)
+    duplicates = find_suspicious_duplicates(root)
     assert len(duplicates) == 0
 
 
@@ -279,35 +291,35 @@ def test_module_is_imported_exact_match():
     """Test module_is_imported with exact match."""
     all_imports = {"foo", "bar.baz"}
     root = Path("src")
-    assert unused_module_guard.module_is_imported("foo", "foo", all_imports, root) is True
+    assert module_is_imported("foo", "foo", all_imports, root) is True
 
 
 def test_module_is_imported_stem_match():
     """Test module_is_imported with stem match."""
     all_imports = {"foo", "bar"}
     root = Path("src")
-    assert unused_module_guard.module_is_imported("bar.baz", "baz", all_imports, root) is True
+    assert module_is_imported("bar.baz", "baz", all_imports, root) is True
 
 
 def test_module_is_imported_partial_match():
     """Test module_is_imported with partial match."""
     all_imports = {"foo.bar"}
     root = Path("src")
-    assert unused_module_guard.module_is_imported("foo.bar.baz", "baz", all_imports, root) is True
+    assert module_is_imported("foo.bar.baz", "baz", all_imports, root) is True
 
 
 def test_module_is_imported_no_match():
     """Test module_is_imported with no match."""
     all_imports = {"foo", "bar"}
     root = Path("src")
-    assert unused_module_guard.module_is_imported("qux.quux", "quux", all_imports, root) is False
+    assert module_is_imported("qux.quux", "quux", all_imports, root) is False
 
 
 def test_module_is_imported_empty_name():
     """Test module_is_imported with empty name."""
     all_imports = {"foo"}
     root = Path("src")
-    assert unused_module_guard.module_is_imported("", "file", all_imports, root) is True
+    assert module_is_imported("", "file", all_imports, root) is True
 
 
 def test_find_unused_modules(tmp_path: Path):
@@ -503,8 +515,8 @@ def test_find_unused_modules_nested_packages(tmp_path: Path):
 def test_import_collector_aliased_import():
     """Test ImportCollector with aliased imports."""
     source = "import foo.bar as fb"
-    tree = unused_module_guard.ast.parse(source)
-    collector = unused_module_guard.ImportCollector()
+    tree = ast.parse(source)
+    collector = ImportCollector()
     collector.visit(tree)
 
     # Should still track the original module name
@@ -516,7 +528,7 @@ def test_suspicious_patterns_coverage():
     """Test coverage of all suspicious patterns."""
     for pattern in SUSPICIOUS_PATTERNS:
         filename = f"module{pattern}"
-        reason = unused_module_guard.duplicate_reason(filename)
+        reason = duplicate_reason(filename)
         assert reason is not None, f"Pattern {pattern} should be detected"
 
 
@@ -525,7 +537,7 @@ def test_collect_all_imports_empty_directory(tmp_path: Path):
     root = tmp_path / "src"
     root.mkdir()
 
-    imports = unused_module_guard.collect_all_imports(root)
+    imports = collect_all_imports(root)
     assert len(imports) == 0
 
 
@@ -534,7 +546,7 @@ def test_find_suspicious_duplicates_empty_directory(tmp_path: Path):
     root = tmp_path / "src"
     root.mkdir()
 
-    duplicates = unused_module_guard.find_suspicious_duplicates(root)
+    duplicates = find_suspicious_duplicates(root)
     assert len(duplicates) == 0
 
 
@@ -563,7 +575,7 @@ def test_collect_all_imports_with_parent(tmp_path: Path):
     write_module(root / "child.py", "import foo")
     write_module(parent / "parent.py", "import bar")
 
-    imports = unused_module_guard.collect_all_imports_with_parent(root)
+    imports = collect_all_imports_with_parent(root)
 
     assert "foo" in imports
     assert "bar" in imports
@@ -575,7 +587,59 @@ def test_module_is_imported_with_partial_paths():
     root = Path("src")
 
     # Should match any partial path
-    assert (
-        unused_module_guard.module_is_imported("foo.bar.baz.qux", "qux", all_imports, root) is True
-    )
-    assert unused_module_guard.module_is_imported("foo.bar", "bar", all_imports, root) is True
+    assert module_is_imported("foo.bar.baz.qux", "qux", all_imports, root) is True
+    assert module_is_imported("foo.bar", "bar", all_imports, root) is True
+
+
+def test_load_whitelist_empty(tmp_path: Path):
+    """Test loading whitelist when file does not exist."""
+    whitelist_path = tmp_path / "nonexistent_whitelist"
+    whitelist = unused_module_guard.load_whitelist(whitelist_path)
+    assert len(whitelist) == 0
+
+
+def test_load_whitelist_with_entries(tmp_path: Path):
+    """Test loading whitelist with entries."""
+    whitelist_path = tmp_path / ".whitelist"
+    whitelist_path.write_text("ci_tools/scripts/old_script.py\nci_tools/legacy.py\n# comment\n\n")
+    whitelist = unused_module_guard.load_whitelist(whitelist_path)
+    assert "ci_tools/scripts/old_script.py" in whitelist
+    assert "ci_tools/legacy.py" in whitelist
+    assert len(whitelist) == 2
+
+
+def test_apply_whitelist_filtering(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test applying whitelist filtering to unused modules."""
+    root = tmp_path / "src"
+    root.mkdir()
+
+    unused = [
+        (root / "module1.py", "Never imported"),
+        (root / "module2.py", "Never imported"),
+        (root / "module3.py", "Never imported"),
+    ]
+
+    whitelist_path = tmp_path / ".whitelist"
+    whitelist_path.write_text("module1.py\nmodule3.py\n")
+
+    filtered = unused_module_guard.apply_whitelist_filtering(unused, whitelist_path, root)
+
+    assert len(filtered) == 1
+    assert filtered[0][0].name == "module2.py"
+
+    captured = capsys.readouterr()
+    assert "Filtered 2 whitelisted module(s)" in captured.out
+
+
+def test_apply_whitelist_filtering_no_whitelist(tmp_path: Path):
+    """Test apply_whitelist_filtering when whitelist does not exist."""
+    root = tmp_path / "src"
+    root.mkdir()
+
+    unused = [(root / "module1.py", "Never imported")]
+    whitelist_path = tmp_path / "nonexistent"
+
+    filtered = unused_module_guard.apply_whitelist_filtering(unused, whitelist_path, root)
+
+    assert len(filtered) == 1
+    assert filtered[0][0].name == "module1.py"
