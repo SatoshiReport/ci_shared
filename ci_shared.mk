@@ -71,7 +71,7 @@ BANDIT_EXCLUDE ?= artifacts,trash,models,logs,htmlcov
 GITLEAKS_SOURCE_DIRS ?= $(strip $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT) scripts docs ci_tools ci_tools_proxy ci_shared.mk shared-tool-config.toml pyproject.toml Makefile README.md SECURITY.md)
 SHARED_CLEANUP_ROOTS ?= $(strip $(SHARED_SOURCE_ROOT) $(SHARED_TEST_ROOT) scripts docs ci_tools ci_tools_proxy)
 
-PYTEST_NODES ?= 7
+PYTEST_NODES ?= 0
 PYTHON ?= python
 # MAX_CLASS_LINES moved to config/ci_config.json
 
