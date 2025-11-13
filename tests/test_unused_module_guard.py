@@ -643,3 +643,81 @@ def test_apply_whitelist_filtering_no_whitelist(tmp_path: Path):
 
     assert len(filtered) == 1
     assert filtered[0][0].name == "module1.py"
+
+
+def test_whitelist_filters_duplicates(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test that whitelist filtering applies to suspicious duplicates."""
+    root = tmp_path / "src"
+    root.mkdir()
+
+    write_module(root / "module.py", "def foo(): pass")
+    write_module(root / "module_backup.py", "def foo_backup(): pass")
+    write_module(root / "module_old.py", "def foo_old(): pass")
+    write_module(
+        root / "main.py",
+        """
+        import module
+        import module_backup
+        import module_old
+        """,
+    )
+
+    whitelist_path = tmp_path / ".whitelist"
+    whitelist_path.write_text("module_backup.py\n")
+
+    with patch(
+        "sys.argv",
+        [
+            "unused_module_guard.py",
+            "--root",
+            str(root),
+            "--whitelist",
+            str(whitelist_path),
+            "--strict",
+        ],
+    ):
+        result = unused_module_guard.main()
+
+    captured = capsys.readouterr()
+    assert "module_old.py" in captured.out
+    assert "module_backup.py" not in captured.out
+    assert "Filtered 1 whitelisted module(s)" in captured.out
+    assert result == 1
+
+
+def test_whitelist_filters_all_duplicates(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """Test that whitelist can filter all suspicious duplicates."""
+    root = tmp_path / "src"
+    root.mkdir()
+
+    write_module(root / "module.py", "def foo(): pass")
+    write_module(root / "module_backup.py", "def foo_backup(): pass")
+    write_module(
+        root / "main.py",
+        """
+        import module
+        import module_backup
+        """,
+    )
+
+    whitelist_path = tmp_path / ".whitelist"
+    whitelist_path.write_text("module_backup.py\n")
+
+    with patch(
+        "sys.argv",
+        [
+            "unused_module_guard.py",
+            "--root",
+            str(root),
+            "--whitelist",
+            str(whitelist_path),
+            "--strict",
+        ],
+    ):
+        result = unused_module_guard.main()
+
+    captured = capsys.readouterr()
+    assert "No unused modules found" in captured.out
+    assert "module_backup.py" not in captured.out
+    assert "Filtered 1 whitelisted module(s)" in captured.out
+    assert result == 0

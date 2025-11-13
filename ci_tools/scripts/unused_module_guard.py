@@ -198,6 +198,7 @@ def main() -> int:
     unused = find_unused_modules(args.root, args.exclude)
     unused = apply_whitelist_filtering(unused, args.whitelist, args.root)
     duplicates = find_suspicious_duplicates(args.root)
+    duplicates = apply_whitelist_filtering(duplicates, args.whitelist, args.root)
     issues_found = report_results(unused, duplicates, args.root, args.strict)
 
     return 1 if issues_found else 0
