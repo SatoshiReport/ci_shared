@@ -699,3 +699,163 @@ def test_handler_contains_suppression_empty_lines():
     handler = stmt.handlers[0]
     result = handler_contains_suppression(handler, [], "token")
     assert result is False
+
+
+def test_normalize_function_exception_variable_names():
+    """Test that functions with different exception variable names are considered identical."""
+    source1 = textwrap.dedent(
+        """
+        def foo():
+            try:
+                risky()
+            except ValueError as e:
+                handle(e)
+    """
+    )
+    source2 = textwrap.dedent(
+        """
+        def foo():
+            try:
+                risky()
+            except ValueError as err:
+                handle(err)
+    """
+    )
+    tree1 = ast.parse(source1)
+    tree2 = ast.parse(source2)
+    stmt1 = tree1.body[0]
+    stmt2 = tree2.body[0]
+    assert isinstance(stmt1, ast.FunctionDef)
+    assert isinstance(stmt2, ast.FunctionDef)
+    result1 = normalize_function(stmt1)
+    result2 = normalize_function(stmt2)
+    assert result1 == result2
+
+
+def test_normalize_function_different_decorators():
+    """Test that functions with different decorators are considered identical."""
+    source1 = textwrap.dedent(
+        """
+        @decorator1
+        def foo(x):
+            return x + 1
+    """
+    )
+    source2 = textwrap.dedent(
+        """
+        @decorator2
+        @decorator3
+        def foo(x):
+            return x + 1
+    """
+    )
+    tree1 = ast.parse(source1)
+    tree2 = ast.parse(source2)
+    stmt1 = tree1.body[0]
+    stmt2 = tree2.body[0]
+    assert isinstance(stmt1, ast.FunctionDef)
+    assert isinstance(stmt2, ast.FunctionDef)
+    result1 = normalize_function(stmt1)
+    result2 = normalize_function(stmt2)
+    assert result1 == result2
+
+
+def test_normalize_function_no_decorators_vs_decorators():
+    """Test that functions with and without decorators are considered identical."""
+    source1 = textwrap.dedent(
+        """
+        def foo(x):
+            return x + 1
+    """
+    )
+    source2 = textwrap.dedent(
+        """
+        @decorator
+        def foo(x):
+            return x + 1
+    """
+    )
+    tree1 = ast.parse(source1)
+    tree2 = ast.parse(source2)
+    stmt1 = tree1.body[0]
+    stmt2 = tree2.body[0]
+    assert isinstance(stmt1, ast.FunctionDef)
+    assert isinstance(stmt2, ast.FunctionDef)
+    result1 = normalize_function(stmt1)
+    result2 = normalize_function(stmt2)
+    assert result1 == result2
+
+
+def test_normalize_function_different_type_annotations():
+    """Test that functions with different type annotations are considered identical."""
+    source1 = textwrap.dedent(
+        """
+        def foo(x: int, y: str) -> int:
+            return x + 1
+    """
+    )
+    source2 = textwrap.dedent(
+        """
+        def foo(x: str, y: int) -> str:
+            return x + 1
+    """
+    )
+    tree1 = ast.parse(source1)
+    tree2 = ast.parse(source2)
+    stmt1 = tree1.body[0]
+    stmt2 = tree2.body[0]
+    assert isinstance(stmt1, ast.FunctionDef)
+    assert isinstance(stmt2, ast.FunctionDef)
+    result1 = normalize_function(stmt1)
+    result2 = normalize_function(stmt2)
+    assert result1 == result2
+
+
+def test_normalize_function_no_annotations_vs_annotations():
+    """Test that functions with and without type annotations are considered identical."""
+    source1 = textwrap.dedent(
+        """
+        def foo(x, y):
+            return x + y
+    """
+    )
+    source2 = textwrap.dedent(
+        """
+        def foo(x: int, y: int) -> int:
+            return x + y
+    """
+    )
+    tree1 = ast.parse(source1)
+    tree2 = ast.parse(source2)
+    stmt1 = tree1.body[0]
+    stmt2 = tree2.body[0]
+    assert isinstance(stmt1, ast.FunctionDef)
+    assert isinstance(stmt2, ast.FunctionDef)
+    result1 = normalize_function(stmt1)
+    result2 = normalize_function(stmt2)
+    assert result1 == result2
+
+
+def test_normalize_function_vararg_kwarg_annotations():
+    """Test that *args and **kwargs annotations are normalized."""
+    source1 = textwrap.dedent(
+        """
+        def foo(*args: int, **kwargs: str):
+            return sum(args)
+    """
+    )
+    source2 = textwrap.dedent(
+        """
+        def foo(*args: str, **kwargs: int):
+            return sum(args)
+    """
+    )
+    tree1 = ast.parse(source1)
+    tree2 = ast.parse(source2)
+    stmt1 = tree1.body[0]
+    stmt2 = tree2.body[0]
+    assert isinstance(stmt1, ast.FunctionDef)
+    assert isinstance(stmt2, ast.FunctionDef)
+    result1 = normalize_function(stmt1)
+    result2 = normalize_function(stmt2)
+    assert result1 == result2

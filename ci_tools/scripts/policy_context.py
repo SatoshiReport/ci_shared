@@ -104,6 +104,15 @@ class FunctionNormalizer(ast.NodeTransformer):  # pylint: disable=invalid-name
             return ast.copy_location(new_node, node)
         return self.generic_visit(node)
 
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> ast.AST:
+        """Normalize exception variable names to 'exc'."""
+        new_node = ast.ExceptHandler(
+            type=self.visit(node.type) if node.type else None,
+            name="exc" if node.name else None,
+            body=[self.visit(stmt) for stmt in node.body],
+        )
+        return ast.copy_location(new_node, node)
+
 
 def normalize_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Normalize a function AST for structural comparison."""
@@ -115,6 +124,15 @@ def normalize_function(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
         and isinstance(clone.body[0].value.value, str)
     ):
         clone.body = clone.body[1:]
+    clone.decorator_list = []
+    clone.returns = None
+    if hasattr(clone, "args") and clone.args:
+        for arg in clone.args.args + clone.args.posonlyargs + clone.args.kwonlyargs:
+            arg.annotation = None
+        if clone.args.kwarg:
+            clone.args.kwarg.annotation = None
+        if clone.args.vararg:
+            clone.args.vararg.annotation = None
     normalizer = FunctionNormalizer()
     normalizer.visit(clone)
     return ast.dump(clone, annotate_fields=False, include_attributes=False)
