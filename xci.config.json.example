@@ -1,0 +1,28 @@
+{
+  "_comment": "Example configuration for xci.sh - Copy to xci.config.json and customize",
+  "_usage": "Environment variables (XCI_*) override config file values",
+
+  "max_attempts": 5,
+  "_max_attempts_help": "Maximum number of automated fix attempts before giving up",
+
+  "log_tail": 200,
+  "_log_tail_help": "Number of log lines from CI failure to send to Codex for context",
+
+  "codex_cli": "codex",
+  "_codex_cli_help": "Executable name or path to the Codex CLI binary",
+
+  "model": "gpt-5-codex",
+  "_model_help": "Codex model to use (must be gpt-5-codex per CI requirements)",
+
+  "reasoning_effort": "high",
+  "_reasoning_effort_help": "Reasoning effort level: low, medium, or high",
+
+  "log_file": ".xci.log",
+  "_log_file_help": "Path to log file for CI output (relative to repository root)",
+
+  "archive_dir": ".xci/archive",
+  "_archive_dir_help": "Directory for archiving prompts, responses, and patches",
+
+  "tmp_dir": ".xci/tmp",
+  "_tmp_dir_help": "Directory for temporary files during execution"
+}

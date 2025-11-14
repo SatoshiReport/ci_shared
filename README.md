@@ -25,7 +25,9 @@ stable.
    ```
    or use the legacy wrapper:
    ```bash
-   xci.sh
+   xci.sh            # Run with auto-detected CI command
+   xci.sh --help     # Show usage and configuration options
+   xci.sh --version  # Show version information
    ```
 3. Optional: include the shared Makefile target to adopt the full guard suite:
    ```make
@@ -42,7 +44,8 @@ stable.
 - Environment variables such as `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT`, and
   `GIT_REMOTE` customize Codex behavior and push targets.
 - `xci.config.json` fine-tunes the legacy shell wrapper (attempt counts, log
-  tails, archive paths).
+  tails, archive paths). See `xci.config.json.example` for all available options.
+  Run `xci.sh --help` for usage documentation.
 
 ## Guard Suite
 Key guard scripts live under `ci_tools/scripts/` and `scripts/`:

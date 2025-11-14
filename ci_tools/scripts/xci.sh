@@ -80,8 +80,67 @@ if ! find "${TMP_DIR}" -mindepth 1 -maxdepth 1 -exec rm -f {} + 2>/dev/null; the
 fi
 
 if ! command -v "${CODEX_CLI}" >/dev/null 2>&1; then
-  echo "[xci] Codex CLI '${CODEX_CLI}' not found in PATH." >&2
+  echo "[xci] ERROR: Codex CLI '${CODEX_CLI}' not found in PATH." >&2
+  echo "[xci] Install from: https://github.com/anthropics/anthropic-cli" >&2
   exit 2
+fi
+
+# Handle --help and --version flags
+if [[ $# -eq 1 ]]; then
+  case "$1" in
+    --help|-h|help)
+      cat <<'EOF'
+xci.sh - Automated CI repair loop via Codex
+
+Usage: xci.sh [ci-command...]
+
+Runs CI command in a loop, capturing failures and requesting patches from Codex
+until CI passes or maximum attempts are reached. Archives all Codex exchanges.
+
+Arguments:
+  [ci-command...]  Command to execute (default: auto-detect ./ci.sh or scripts/ci.sh)
+
+Environment Variables:
+  XCI_MAX_ATTEMPTS       Maximum fix attempts (default: 5)
+  XCI_LOG_TAIL           Log lines to send to Codex (default: 200)
+  XCI_CLI                Codex CLI executable name (default: codex)
+  XCI_MODEL              Codex model to use (default: gpt-5-codex)
+  XCI_REASONING_EFFORT   Reasoning effort: low, medium, high (default: high)
+  XCI_LOG_FILE           Log file path (default: .xci.log)
+  XCI_ARCHIVE_DIR        Archive directory (default: .xci/archive)
+  XCI_TMP_DIR            Temp directory (default: .xci/tmp)
+  XCI_CONFIG             Config file path (default: xci.config.json)
+
+Configuration File (xci.config.json):
+  {
+    "max_attempts": 5,
+    "log_tail": 200,
+    "codex_cli": "codex",
+    "model": "gpt-5-codex",
+    "reasoning_effort": "high",
+    "log_file": ".xci.log",
+    "archive_dir": ".xci/archive",
+    "tmp_dir": ".xci/tmp"
+  }
+
+Examples:
+  xci.sh                    # Auto-detect and run CI script
+  xci.sh ./scripts/ci.sh    # Explicit CI command
+  xci.sh pytest tests/      # Run pytest in repair loop
+
+Documentation:
+  See docs/automation.md for detailed usage and examples.
+
+Note: For more advanced features (--dry-run, --patch-approval-mode, etc.),
+      use the Python interface: python -m ci_tools.ci --help
+EOF
+      exit 0
+      ;;
+    --version|-v|version)
+      echo "xci.sh version 0.1.0 (codex-ci-tools)"
+      exit 0
+      ;;
+  esac
 fi
 
 # Track start time for stats
@@ -97,8 +156,11 @@ else
   elif [[ -x "scripts/dev/ci.sh" ]]; then
     CI_COMMAND=(scripts/dev/ci.sh)
   else
-    echo "[xci] Unable to locate an executable ci.sh in the current directory." >&2
-    echo "[xci] Provide a command explicitly, e.g. ./xci.sh ./scripts/dev/ci.sh" >&2
+    echo "[xci] ERROR: Unable to locate an executable ci.sh in the current directory." >&2
+    echo "[xci] Searched: ./ci.sh, scripts/ci.sh, scripts/dev/ci.sh" >&2
+    echo "[xci] Provide a command explicitly: xci.sh <command>" >&2
+    echo "[xci] Example: xci.sh ./scripts/dev/ci.sh" >&2
+    echo "[xci] Run 'xci.sh --help' for more information." >&2
     exit 2
   fi
 fi
