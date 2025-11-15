@@ -36,6 +36,7 @@ class TestRunCommandBuffered:
                 ["echo", "test"],
                 check=False,
                 env={},
+                cwd=None,
             )
             assert isinstance(result, CommandResult)
             assert result.returncode == 0
@@ -54,6 +55,7 @@ class TestRunCommandBuffered:
                 ["false"],
                 check=False,
                 env={},
+                cwd=None,
             )
             assert result.returncode == 1
             assert result.stderr == "error message"
@@ -72,6 +74,7 @@ class TestRunCommandBuffered:
                     ["nonexistent"],
                     check=True,
                     env={},
+                    cwd=None,
                 )
             assert exc_info.value.returncode == 127
 
@@ -87,6 +90,7 @@ class TestRunCommandBuffered:
                 ["cmd"],
                 check=False,
                 env={"KEY": "value"},
+                cwd=None,
             )
             assert result.stdout == "standard output"
             assert result.stderr == "standard error"
@@ -140,6 +144,7 @@ class TestRunCommandStreaming:
                 ["echo", "test"],
                 check=False,
                 env={},
+                cwd=None,
             )
 
             assert result.returncode == 0
@@ -163,6 +168,7 @@ class TestRunCommandStreaming:
                     ["false"],
                     check=True,
                     env={},
+                    cwd=None,
                 )
             assert exc_info.value.returncode == 1
 
@@ -179,6 +185,7 @@ class TestRunCommandStreaming:
                 ["cmd"],
                 check=False,
                 env={},
+                cwd=None,
             )
 
             assert result.returncode == 0

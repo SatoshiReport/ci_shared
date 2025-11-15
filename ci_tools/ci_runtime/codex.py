@@ -10,7 +10,7 @@ from typing import Optional
 
 from .config import RISKY_PATTERNS
 from .models import CodexCliError, PatchPrompt
-from .process import log_codex_interaction
+from .process import _stream_pipe, log_codex_interaction
 
 
 def build_codex_command(model: str, reasoning_effort: Optional[str]) -> list[str]:
@@ -33,29 +33,25 @@ def _feed_prompt(process: subprocess.Popen[str], prompt: str) -> None:
 
 
 def _stream_output(process: subprocess.Popen[str]) -> tuple[list[str], list[str]]:
-    """Read stdout and stderr from the Codex subprocess concurrently."""
+    """Read stdout and stderr from the Codex subprocess concurrently.
+
+    Delegates to the canonical _stream_pipe implementation in process.py.
+    """
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
-
-    def _pump(pipe, collector: list[str]) -> None:
-        try:
-            for line in iter(pipe.readline, ""):
-                collector.append(line)
-        finally:
-            pipe.close()
 
     threads: list[threading.Thread] = []
     if process.stdout:
         threads.append(
             threading.Thread(
-                target=_pump, args=(process.stdout, stdout_lines), daemon=True
+                target=_stream_pipe, args=(process.stdout, stdout_lines), daemon=True
             )
         )
         threads[-1].start()
     if process.stderr:
         threads.append(
             threading.Thread(
-                target=_pump, args=(process.stderr, stderr_lines), daemon=True
+                target=_stream_pipe, args=(process.stderr, stderr_lines), daemon=True
             )
         )
         threads[-1].start()

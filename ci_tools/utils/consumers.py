@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
-CONFIG_CANDIDATES: tuple[str, ...] = (
-    "ci_shared.config.json",
-    ".ci_shared.config.json",
-)
+from ci_tools.ci_runtime.config import CONFIG_CANDIDATES
+from ci_tools.scripts.config_loader import load_json_config
+
 DEFAULT_CONSUMERS: tuple[str, ...] = ("api", "zeus", "kalshi", "aws")
 
 
@@ -25,18 +23,14 @@ class ConsumingRepo:
 
 
 def _load_config(repo_root: Path) -> dict | None:
-    for candidate in CONFIG_CANDIDATES:
-        config_path = repo_root / candidate
-        if not config_path.is_file():
-            continue
-        try:
-            with config_path.open("r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(data, dict):
-            return data
-    return None
+    """Load configuration from repo root.
+
+    Delegates to canonical load_json_config implementation in config_loader.
+    """
+    result = load_json_config(
+        repo_root, CONFIG_CANDIDATES, warn_on_error=False, missing_value=None
+    )
+    return result if result else None
 
 
 def _coerce_repo_entry(

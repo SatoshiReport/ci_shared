@@ -17,6 +17,7 @@ def _run_command_buffered(
     *,
     check: bool,
     env: dict[str, str],
+    cwd: Optional[Path],
 ) -> CommandResult:
     """Run a subprocess and capture its output without streaming."""
     process = subprocess.run(
@@ -25,6 +26,7 @@ def _run_command_buffered(
         stderr=subprocess.PIPE,
         text=True,
         env=env,
+        cwd=str(cwd) if cwd else None,
         check=False,
     )
     if check and process.returncode != 0:
@@ -41,13 +43,23 @@ def _run_command_buffered(
     )
 
 
-def _stream_pipe(pipe, collector: list[str], target) -> None:
-    """Collect text from a pipe while forwarding it to the provided stream."""
+def _stream_pipe(pipe, collector: list[str], target=None) -> None:
+    """Collect text from a pipe, optionally forwarding to a stream.
+
+    This consolidates duplicate stream processing logic used across
+    process.py and codex.py modules.
+
+    Args:
+        pipe: File-like object to read from
+        collector: List to append lines to
+        target: Optional stream to forward lines to (e.g., sys.stdout)
+    """
     try:
         for line in iter(pipe.readline, ""):
             collector.append(line)
-            target.write(line)
-            target.flush()
+            if target is not None:
+                target.write(line)
+                target.flush()
     finally:
         pipe.close()
 
@@ -57,6 +69,7 @@ def _run_command_streaming(
     *,
     check: bool,
     env: dict[str, str],
+    cwd: Optional[Path],
 ) -> CommandResult:
     """Stream stdout/stderr live while accumulating the full text."""
     stdout_lines: list[str] = []
@@ -68,6 +81,7 @@ def _run_command_streaming(
         text=True,
         bufsize=1,
         env=env,
+        cwd=str(cwd) if cwd else None,
     ) as process:
         threads: list[threading.Thread] = []
 
@@ -115,8 +129,20 @@ def run_command(
     check: bool = False,
     live: bool = False,
     env: Optional[dict[str, str]] = None,
+    cwd: Optional[Path] = None,
 ) -> CommandResult:
-    """Run a command, optionally streaming output while capturing it."""
+    """Run a command, optionally streaming output while capturing it.
+
+    Args:
+        args: Command and arguments to execute
+        check: If True, raise CalledProcessError on non-zero exit
+        live: If True, stream output to stdout/stderr while capturing
+        env: Additional environment variables to merge with os.environ
+        cwd: Working directory for the command (defaults to current directory)
+
+    Returns:
+        CommandResult with returncode, stdout, and stderr
+    """
     merged_env = dict(os.environ)
     if env:
         merged_env.update(env)
@@ -126,6 +152,7 @@ def run_command(
         command_args,
         check=check,
         env=merged_env,
+        cwd=cwd,
     )
 
 
@@ -153,6 +180,41 @@ def gather_file_diff(path: str) -> str:
     return result.stdout
 
 
+def get_current_branch(cwd: Optional[Path] = None) -> str:
+    """Get the current git branch name.
+
+    Args:
+        cwd: Working directory (defaults to current directory)
+
+    Returns:
+        Current branch name
+
+    Raises:
+        subprocess.CalledProcessError: If git command fails
+    """
+    result = run_command(["git", "branch", "--show-current"], check=True, cwd=cwd)
+    return result.stdout.strip()
+
+
+def get_commit_message(ref: str = "HEAD", cwd: Optional[Path] = None) -> str:
+    """Get commit message for a given git reference.
+
+    Args:
+        ref: Git reference (commit hash, branch name, HEAD, etc.)
+        cwd: Working directory (defaults to current directory)
+
+    Returns:
+        Commit message subject line
+
+    Raises:
+        subprocess.CalledProcessError: If git command fails
+    """
+    result = run_command(
+        ["git", "log", "-1", "--pretty=format:%s", ref], check=True, cwd=cwd
+    )
+    return result.stdout.strip()
+
+
 def log_codex_interaction(kind: str, prompt: str, response: str) -> None:
     """Append the interaction to logs/codex_ci.log for later auditing."""
     log_dir = Path("logs")
@@ -172,5 +234,7 @@ __all__ = [
     "gather_git_diff",
     "gather_git_status",
     "gather_file_diff",
+    "get_current_branch",
+    "get_commit_message",
     "log_codex_interaction",
 ]

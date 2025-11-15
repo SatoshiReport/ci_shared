@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
-import sys
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+from ci_tools.scripts.config_loader import load_json_config
 from ci_tools.scripts.guard_common import detect_repo_root
 
 CONFIG_CANDIDATES = ("ci_shared.config.json", ".ci_shared.config.json")
@@ -29,24 +28,13 @@ DEFAULT_REASONING_EFFORT = "high"
 
 
 def load_repo_config(repo_root: Path) -> dict[str, Any]:
-    """Load shared CI configuration when available."""
+    """Load shared CI configuration when available.
 
-    for relative in CONFIG_CANDIDATES:
-        candidate = repo_root / relative
-        if not candidate.is_file():
-            continue
-        try:
-            with candidate.open("r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except json.JSONDecodeError:
-            print(
-                f"[warning] Failed to parse {candidate}; using defaults.",
-                file=sys.stderr,
-            )
-            continue
-        if isinstance(data, dict):
-            return data
-    return {}
+    Delegates to the shared load_json_config implementation in config_loader.
+    """
+    return load_json_config(
+        repo_root, CONFIG_CANDIDATES, warn_on_error=True, missing_value={}
+    )
 
 
 def _coerce_repo_context(config: dict[str, Any], initial: str) -> str:

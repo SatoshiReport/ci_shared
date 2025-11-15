@@ -8,15 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
+from ci_tools.ci_runtime.models import CommandResult
+from ci_tools.ci_runtime.process import get_commit_message, run_command
 from ci_tools.scripts.propagate_ci_shared import (
     _commit_and_push_update,
     _print_summary,
     _process_repositories,
     _sync_repo_configs,
     _validate_repo_state,
-    get_latest_commit_message,
     main,
-    run_command,
     update_submodule_in_repo,
 )
 from ci_tools.utils.consumers import ConsumingRepo
@@ -24,54 +24,32 @@ from ci_tools.utils.consumers import ConsumingRepo
 
 def test_run_command_success():
     """Test run_command with successful command."""
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["echo", "test"],
-            returncode=0,
-            stdout="output",
-            stderr="",
-        )
-        result = run_command(["echo", "test"], Path("/tmp"))
-        assert result.returncode == 0
-        assert result.stdout == "output"
+    result = run_command(["echo", "test"], cwd=None)
+    assert result.returncode == 0
+    assert "test" in result.stdout
 
 
 def test_run_command_failure_no_check():
     """Test run_command with failed command and check=False."""
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["false"],
-            returncode=1,
-            stdout="",
-            stderr="error",
-        )
-        result = run_command(["false"], Path("/tmp"), check=False)
-        assert result.returncode == 1
+    result = run_command(["false"], cwd=None, check=False)
+    assert result.returncode != 0
 
 
 def test_run_command_failure_with_check():
     """Test run_command raises exception with check=True."""
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["false"],
-            returncode=1,
-            stdout="",
-            stderr="error",
-        )
-        with pytest.raises(subprocess.CalledProcessError):
-            run_command(["false"], Path("/tmp"), check=True)
+    with pytest.raises(subprocess.CalledProcessError):
+        run_command(["false"], cwd=None, check=True)
 
 
-def test_get_latest_commit_message():
-    """Test get_latest_commit_message returns commit message."""
-    with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["git", "log"],
+def test_get_commit_message():
+    """Test get_commit_message returns commit message."""
+    with patch("ci_tools.ci_runtime.process.run_command") as mock_run:
+        mock_run.return_value = CommandResult(
             returncode=0,
             stdout="Fix: Update CI tooling",
             stderr="",
         )
-        result = get_latest_commit_message(Path("/tmp"))
+        result = get_commit_message(cwd=Path("/tmp"))
         assert result == "Fix: Update CI tooling"
 
 
@@ -87,8 +65,8 @@ def test_validate_repo_state_existing_repo(tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["git", "status"], returncode=0, stdout="", stderr=""
+        mock_run.return_value = CommandResult(
+            returncode=0, stdout="", stderr=""
         )
         result = _validate_repo_state(repo_path, "repo")
         assert result is True
@@ -102,22 +80,19 @@ def test_validate_repo_state_uncommitted_changes(tmp_path):
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
         mock_run.side_effect = [
             # git status --porcelain (shows uncommitted changes)
-            subprocess.CompletedProcess(
-                args=["git", "status"],
+            CommandResult(
                 returncode=0,
                 stdout=" M file.py\n",
                 stderr="",
             ),
             # git add -A
-            subprocess.CompletedProcess(
-                args=["git", "add"],
+            CommandResult(
                 returncode=0,
                 stdout="",
                 stderr="",
             ),
             # git commit
-            subprocess.CompletedProcess(
-                args=["git", "commit"],
+            CommandResult(
                 returncode=0,
                 stdout="",
                 stderr="",
@@ -136,22 +111,19 @@ def test_validate_repo_state_commit_failure(tmp_path):
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
         mock_run.side_effect = [
             # git status --porcelain (shows uncommitted changes)
-            subprocess.CompletedProcess(
-                args=["git", "status"],
+            CommandResult(
                 returncode=0,
                 stdout=" M file.py\n",
                 stderr="",
             ),
             # git add -A
-            subprocess.CompletedProcess(
-                args=["git", "add"],
+            CommandResult(
                 returncode=0,
                 stdout="",
                 stderr="",
             ),
             # git commit (fails)
-            subprocess.CompletedProcess(
-                args=["git", "commit"],
+            CommandResult(
                 returncode=1,
                 stdout="",
                 stderr="commit failed",
@@ -167,8 +139,7 @@ def test_validate_repo_state_clean(tmp_path):
     repo_path.mkdir()
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=["git", "status"],
+        mock_run.return_value = CommandResult(
             returncode=0,
             stdout="",
             stderr="",
@@ -187,10 +158,10 @@ def test_sync_repo_configs_no_changes(tmp_path):
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
         mock_run.side_effect = [
-            subprocess.CompletedProcess(args=["sync"], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=["guard"], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=["git", "add"], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=["git", "status"], returncode=0, stdout="", stderr=""),
+            CommandResult(returncode=0, stdout="", stderr=""),
+            CommandResult(returncode=0, stdout="", stderr=""),
+            CommandResult(returncode=0, stdout="", stderr=""),
+            CommandResult(returncode=0, stdout="", stderr=""),
         ]
         result = _sync_repo_configs(repo_path, "repo", source_root)
         assert result is False
@@ -206,12 +177,10 @@ def test_sync_repo_configs_with_changes(tmp_path):
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
         mock_run.side_effect = [
-            subprocess.CompletedProcess(args=["sync"], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=["guard"], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(args=["git", "add"], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(
-                args=["git", "status"], returncode=0, stdout=" M file\n", stderr=""
-            ),
+            CommandResult(returncode=0, stdout="", stderr=""),
+            CommandResult(returncode=0, stdout="", stderr=""),
+            CommandResult(returncode=0, stdout="", stderr=""),
+            CommandResult(returncode=0, stdout=" M file\n", stderr=""),
         ]
         result = _sync_repo_configs(repo_path, "repo", source_root)
         assert result is True
@@ -223,9 +192,7 @@ def test_commit_and_push_update_commit_failure(tmp_path):
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
         mock_run.side_effect = [
-            subprocess.CompletedProcess(
-                args=["git", "commit"], returncode=1, stdout="", stderr="error"
-            )
+            CommandResult(returncode=1, stdout="", stderr="error")
         ]
         result = _commit_and_push_update(repo_path, "repo", "Test commit")
         assert result is False
@@ -236,17 +203,13 @@ def test_commit_and_push_update_branch_detection_failure(tmp_path):
     repo_path = tmp_path / "repo"
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
-        mock_run.side_effect = [
-            subprocess.CompletedProcess(args=["git", "commit"], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(
-                args=["git", "branch", "--show-current"],
-                returncode=1,
-                stdout="",
-                stderr="error",
-            ),
-        ]
-        result = _commit_and_push_update(repo_path, "repo", "Test commit")
-        assert result is False
+        with patch("ci_tools.scripts.propagate_ci_shared.get_current_branch") as mock_branch:
+            mock_run.return_value = CommandResult(
+                returncode=0, stdout="", stderr=""
+            )
+            mock_branch.side_effect = subprocess.CalledProcessError(1, "git")
+            result = _commit_and_push_update(repo_path, "repo", "Test commit")
+            assert result is False
 
 
 def test_commit_and_push_update_push_failure(tmp_path):
@@ -254,20 +217,14 @@ def test_commit_and_push_update_push_failure(tmp_path):
     repo_path = tmp_path / "repo"
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
-        mock_run.side_effect = [
-            subprocess.CompletedProcess(args=["git", "commit"], returncode=0, stdout="", stderr=""),
-            subprocess.CompletedProcess(
-                args=["git", "branch", "--show-current"],
-                returncode=0,
-                stdout="main",
-                stderr="",
-            ),
-            subprocess.CompletedProcess(
-                args=["git", "push"], returncode=1, stdout="", stderr="error"
-            ),
-        ]
-        result = _commit_and_push_update(repo_path, "repo", "Test commit")
-        assert result is False
+        with patch("ci_tools.scripts.propagate_ci_shared.get_current_branch") as mock_branch:
+            mock_branch.return_value = "main"
+            mock_run.side_effect = [
+                CommandResult(returncode=0, stdout="", stderr=""),
+                CommandResult(returncode=1, stdout="", stderr="error"),
+            ]
+            result = _commit_and_push_update(repo_path, "repo", "Test commit")
+            assert result is False
 
 
 def test_commit_and_push_update_success(tmp_path):
@@ -275,28 +232,14 @@ def test_commit_and_push_update_success(tmp_path):
     repo_path = tmp_path / "repo"
 
     with patch("ci_tools.scripts.propagate_ci_shared.run_command") as mock_run:
-        mock_run.side_effect = [
-            subprocess.CompletedProcess(
-                args=["git", "commit"],
-                returncode=0,
-                stdout="",
-                stderr="",
-            ),
-            subprocess.CompletedProcess(
-                args=["git", "branch", "--show-current"],
-                returncode=0,
-                stdout="main",
-                stderr="",
-            ),
-            subprocess.CompletedProcess(
-                args=["git", "push"],
-                returncode=0,
-                stdout="",
-                stderr="",
-            ),
-        ]
-        result = _commit_and_push_update(repo_path, "repo", "Test commit")
-        assert result is True
+        with patch("ci_tools.scripts.propagate_ci_shared.get_current_branch") as mock_branch:
+            mock_branch.return_value = "main"
+            mock_run.side_effect = [
+                CommandResult(returncode=0, stdout="", stderr=""),
+                CommandResult(returncode=0, stdout="", stderr=""),
+            ]
+            result = _commit_and_push_update(repo_path, "repo", "Test commit")
+            assert result is True
 
 
 def test_update_submodule_in_repo_invalid_state(tmp_path):
@@ -378,7 +321,7 @@ def test_main_commit_message_failure(tmp_path, monkeypatch):
     (repo_dir / "ci_shared.mk").touch()
     monkeypatch.chdir(repo_dir)
 
-    with patch("ci_tools.scripts.propagate_ci_shared.get_latest_commit_message") as mock:
+    with patch("ci_tools.scripts.propagate_ci_shared.get_commit_message") as mock:
         mock.side_effect = subprocess.CalledProcessError(1, "git")
         result = main()
         assert result == 1
@@ -392,7 +335,7 @@ def test_main_success_with_updates(tmp_path, monkeypatch):
     (repo_dir / "ci_shared.mk").touch()
     monkeypatch.chdir(repo_dir)
 
-    with patch("ci_tools.scripts.propagate_ci_shared.get_latest_commit_message") as mock1:
+    with patch("ci_tools.scripts.propagate_ci_shared.get_commit_message") as mock1:
         with patch("ci_tools.utils.consumers.load_consuming_repos") as mock_load:
             with patch("ci_tools.scripts.propagate_ci_shared._process_repositories") as mock2:
                 mock1.return_value = "Test commit"
@@ -410,7 +353,7 @@ def test_main_with_failures(tmp_path, monkeypatch):
     (repo_dir / "ci_shared.mk").touch()
     monkeypatch.chdir(repo_dir)
 
-    with patch("ci_tools.scripts.propagate_ci_shared.get_latest_commit_message") as mock1:
+    with patch("ci_tools.scripts.propagate_ci_shared.get_commit_message") as mock1:
         with patch("ci_tools.utils.consumers.load_consuming_repos") as mock_load:
             with patch("ci_tools.scripts.propagate_ci_shared._process_repositories") as mock2:
                 mock1.return_value = "Test commit"

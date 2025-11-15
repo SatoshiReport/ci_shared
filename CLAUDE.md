@@ -57,6 +57,72 @@ python -m ci_tools.scripts.coverage_guard --min-coverage 80
 python -m ci_tools.scripts.dependency_guard --root src
 ```
 
+## Code Duplication Policy - CRITICAL
+
+**ALWAYS search for existing implementations before creating new functions.**
+
+### Before Writing Any New Function
+
+1. **Search the codebase first**:
+   ```bash
+   # Search for similar function names
+   grep -r "def function_name" src/
+
+   # Search for similar functionality by keyword
+   grep -r "keyword" src/ | grep "def "
+   ```
+
+2. **Check `src/` for common utilities**: Look for existing implementations before creating new functions
+
+3. **Use the exploration agent**: When unsure if functionality exists:
+   ```
+   "Search the codebase for functions that process X"
+   "Find all implementations of Y"
+   ```
+
+### When You Find Duplicate Functions
+
+**Consolidate them immediately.** Do NOT add another duplicate.
+
+1. Identify the most complete/tested implementation
+2. Move it to an appropriate shared location if needed (e.g., `src/common/`, `src/utils/`)
+3. Update duplicates to delegate to the canonical version
+4. Add clear documentation about the delegation
+5. Test that behavior is preserved
+
+Example consolidation:
+```python
+# BEFORE: Duplicate implementation
+def process_data(data):
+    return data.strip().lower()
+
+# AFTER: Delegate to canonical
+from src.utils.string_utils import normalize_string
+
+def process_data(data):
+    """Delegates to canonical implementation in src.utils.string_utils."""
+    return normalize_string(data)
+```
+
+### Leverage Shared Utilities
+
+- **DO**: Create reusable utilities for common operations
+- **DO**: Put shared functions in appropriate modules (`src/common/`, `src/utils/`, etc.)
+- **DO**: Document and test shared utilities thoroughly
+- **DON'T**: Duplicate logic across modules
+- **DON'T**: Create module-specific versions of common utilities
+
+### Why This Matters
+
+Duplicate functions cause:
+- **Behavioral drift**: Different parts of code using slightly different logic
+- **Bug multiplication**: Same bug must be fixed in multiple places
+- **Maintenance burden**: Changes must be made in multiple locations
+- **Testing complexity**: Same logic tested multiple times
+- **Code bloat**: Unnecessary increase in codebase size
+
+**Keep it DRY (Don't Repeat Yourself).**
+
 ## Architecture
 
 ### Core Modules

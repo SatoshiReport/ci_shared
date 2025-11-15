@@ -11,35 +11,12 @@ import sys
 from pathlib import Path
 from typing import Iterable
 
+from ci_tools.ci_runtime.process import (
+    get_commit_message,
+    get_current_branch,
+    run_command,
+)
 from ci_tools.utils.consumers import ConsumingRepo, load_consuming_repos
-
-
-def run_command(
-    cmd: list[str], cwd: Path, check: bool = True
-) -> subprocess.CompletedProcess:
-    """Run a command and return the result."""
-    result = subprocess.run(
-        cmd,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if check and result.returncode != 0:
-        print(f"Command failed: {' '.join(cmd)}", file=sys.stderr)
-        print(f"stdout: {result.stdout}", file=sys.stderr)
-        print(f"stderr: {result.stderr}", file=sys.stderr)
-        raise subprocess.CalledProcessError(result.returncode, cmd)
-    return result
-
-
-def get_latest_commit_message(repo_path: Path) -> str:
-    """Get the latest commit message from ci_shared."""
-    result = run_command(
-        ["git", "log", "-1", "--pretty=format:%s"],
-        cwd=repo_path,
-    )
-    return result.stdout.strip()
 
 
 def _validate_repo_state(repo_path: Path, repo_name: str) -> bool:
@@ -117,7 +94,7 @@ def _sync_repo_configs(repo_path: Path, repo_name: str, source_root: Path) -> bo
         print(f"⚠️  tool_config_guard --sync failed for {repo_name}")
         return False
 
-    run_command(["git", "add", "-A"], cwd=repo_path)
+    run_command(["git", "add", "-A"], cwd=repo_path, check=True)
     status = run_command(
         ["git", "status", "--porcelain"],
         cwd=repo_path,
@@ -148,18 +125,13 @@ def _commit_and_push_update(
 
     print(f"✓ Committed shared CI updates in {repo_name}")
 
-    # Get current branch name
-    branch_result = run_command(
-        ["git", "branch", "--show-current"],
-        cwd=repo_path,
-        check=False,
-    )
-    if branch_result.returncode != 0:
+    # Get current branch name using shared utility
+    try:
+        current_branch = get_current_branch(cwd=repo_path)
+    except subprocess.CalledProcessError:
         print(f"⚠️  Failed to determine current branch in {repo_name}")
         print(f"   Run 'cd {repo_path} && git push' to push manually")
         return False
-
-    current_branch = branch_result.stdout.strip()
 
     # Push with --set-upstream to handle branches without upstream configured
     result = run_command(
@@ -264,9 +236,9 @@ def main() -> int:
     print("Propagating ci_shared updates to consuming repositories")
     print("=" * 70)
 
-    # Get the latest commit message
+    # Get the latest commit message using shared utility
     try:
-        commit_msg = get_latest_commit_message(cwd)
+        commit_msg = get_commit_message(cwd=cwd)
         print(f"\nLatest ci_shared commit: {commit_msg}")
     except subprocess.CalledProcessError:
         print("⚠️  Failed to get latest commit message", file=sys.stderr)
