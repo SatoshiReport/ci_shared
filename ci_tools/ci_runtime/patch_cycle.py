@@ -18,7 +18,10 @@ from .models import (
     RuntimeOptions,
 )
 from .patching import apply_patch, patch_looks_risky
-from .process import gather_git_diff, gather_git_status
+from .process import gather_git_diff_limited, gather_git_status
+
+# Backward-compatible alias for tests and call sites that expect gather_git_diff
+gather_git_diff = gather_git_diff_limited
 
 
 def _obtain_patch_diff(*, options: RuntimeOptions, prompt: PatchPrompt) -> str:

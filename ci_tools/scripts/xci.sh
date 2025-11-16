@@ -170,6 +170,31 @@ mktmp() {
   mktemp "${TMP_DIR}/xci.XXXXXX"
 }
 
+# Helper to limit diff size for Codex prompt to prevent context window overflow
+limit_diff_size() {
+  local diff_text="$1"
+  local max_chars=50000
+  local max_lines=1000
+
+  local char_count=${#diff_text}
+  local line_count
+  line_count=$(echo "$diff_text" | wc -l | tr -d ' ')
+
+  if (( char_count > max_chars )) || (( line_count > max_lines )); then
+    cat <<EOF
+[Diff too large: ${char_count} chars, ${line_count} lines]
+
+Summary (git diff --stat):
+$(git diff --stat 2>/dev/null || true)
+
+Note: Full diff exceeded limits (${max_chars} chars or ${max_lines} lines).
+The focused changes from the CI failure output above show which files need attention.
+EOF
+  else
+    echo "$diff_text"
+  fi
+}
+
 attempt=1
 while true; do
   echo "[xci] Attempt ${attempt}: ${CI_COMMAND[*]}"
@@ -183,7 +208,7 @@ while true; do
     echo "[xci] CI passed on attempt ${attempt}."
     status_after_ci=$(git status --short 2>/dev/null || true)
     if [[ -n "${status_after_ci}" ]]; then
-      diff_after_ci=$(git diff 2>/dev/null || true)
+      diff_after_ci=$(limit_diff_size "$(git diff 2>/dev/null || true)")
       timestamp=$(date +"%Y%m%dT%H%M%S")
       commit_prefix="${ARCHIVE_DIR}/commit_${timestamp}"
       commit_prompt=$(mktmp)
@@ -300,7 +325,7 @@ PY
 
   log_tail=$(tail -n "${TAIL_LINES}" "${LOG_FILE}" 2>/dev/null || true)
   git_status=$(git status --short 2>/dev/null || true)
-  git_diff=$(git diff 2>/dev/null || true)
+  git_diff=$(limit_diff_size "$(git diff 2>/dev/null || true)")
 
   prompt_file=$(mktmp)
   cat >"${prompt_file}" <<EOF_PROMPT

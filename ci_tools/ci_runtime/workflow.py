@@ -25,7 +25,10 @@ from .models import (
     RuntimeOptions,
 )
 from .patch_cycle import request_and_apply_patches
-from .process import gather_git_diff, run_command
+from .process import gather_git_diff_limited, run_command
+
+# Use the limited diff for prompts while preserving the expected name for tests.
+gather_git_diff = gather_git_diff_limited
 
 
 def _derive_runtime_flags(

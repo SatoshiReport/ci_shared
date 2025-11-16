@@ -168,6 +168,47 @@ def gather_git_diff(*, staged: bool = False) -> str:
     return result.stdout
 
 
+def gather_git_diff_limited(
+    *,
+    staged: bool = False,
+    max_chars: int = 50000,
+    max_lines: int = 1000,
+) -> str:
+    """Return git diff with size limits to prevent context window overflow.
+
+    When diff exceeds limits, falls back to git diff --stat summary.
+
+    Args:
+        staged: If True, return staged changes (--cached)
+        max_chars: Maximum characters before falling back to summary
+        max_lines: Maximum lines before falling back to summary
+
+    Returns:
+        Git diff text, or a summary if too large
+    """
+    full_diff = gather_git_diff(staged=staged)
+
+    char_count = len(full_diff)
+    line_count = full_diff.count("\n")
+
+    if char_count <= max_chars and line_count <= max_lines:
+        return full_diff
+
+    stat_args = ["git", "diff", "--stat"]
+    if staged:
+        stat_args.insert(2, "--cached")
+
+    stat_result = run_command(stat_args)
+
+    return (
+        f"[Diff too large: {char_count:,} chars, {line_count:,} lines]\n\n"
+        f"Summary (git diff --stat):\n{stat_result.stdout}\n\n"
+        f"Note: Full diff exceeds limits ({max_chars:,} chars or {max_lines:,} lines).\n"
+        f"The focused diff above shows changes to files implicated in this failure.\n"
+        f"Review the CI error output to identify which files need attention."
+    )
+
+
 def gather_git_status() -> str:
     """Return a short git status suitable for prompt summaries."""
     result = run_command(["git", "status", "--short"])
@@ -232,6 +273,7 @@ __all__ = [
     "run_command",
     "tail_text",
     "gather_git_diff",
+    "gather_git_diff_limited",
     "gather_git_status",
     "gather_file_diff",
     "get_current_branch",

@@ -32,6 +32,7 @@ if TYPE_CHECKING:  # pragma: no cover - type checking helper block
     patch_looks_risky = _patching.patch_looks_risky
     gather_file_diff = _process.gather_file_diff
     gather_git_diff = _process.gather_git_diff
+    gather_git_diff_limited = _process.gather_git_diff_limited
     gather_git_status = _process.gather_git_status
     log_codex_interaction = _process.log_codex_interaction
     run_command = _process.run_command
@@ -83,6 +84,7 @@ __all__ = [
     "run_command",
     "tail_text",
     "gather_git_diff",
+    "gather_git_diff_limited",
     "gather_git_status",
     "gather_file_diff",
     "log_codex_interaction",
